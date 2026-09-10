@@ -13,29 +13,29 @@ from .api import (
     ApiResponseError,
     AuthenticationError,
     CannotConnectError,
+    GatewayApiClient,
     GatewayBootstrap,
     InvalidResponseError,
-    OskSenseApiClient,
     UnsupportedVersionError,
 )
 from .const import CONF_TOKEN, DOMAIN, MANUFACTURER
 
 
 @dataclass(frozen=True, slots=True)
-class OskSenseRuntimeData:
+class RuntimeData:
     """Runtime state owned by one config entry."""
 
-    client: OskSenseApiClient
+    client: GatewayApiClient
     bootstrap: GatewayBootstrap
 
 
 if TYPE_CHECKING:
-    type OskSenseConfigEntry = ConfigEntry[OskSenseRuntimeData]
+    type IntegrationConfigEntry = ConfigEntry[RuntimeData]
 else:
-    type OskSenseConfigEntry = Any
+    type IntegrationConfigEntry = Any
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: OskSenseConfigEntry) -> bool:
+async def async_setup_entry(hass: HomeAssistant, entry: IntegrationConfigEntry) -> bool:
     """Set up an OSK Sense gateway from a config entry."""
     from homeassistant.const import CONF_HOST
     from homeassistant.exceptions import (
@@ -45,7 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: OskSenseConfigEntry) -> 
     )
     from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-    client = OskSenseApiClient(
+    client = GatewayApiClient(
         entry.data[CONF_HOST],
         entry.data[CONF_TOKEN],
         async_get_clientsession(hass),
@@ -59,17 +59,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: OskSenseConfigEntry) -> 
     except (ApiResponseError, InvalidResponseError, UnsupportedVersionError) as error:
         raise ConfigEntryError("Invalid or unsupported OSK Sense response") from error
 
-    entry.runtime_data = OskSenseRuntimeData(client, bootstrap)
+    entry.runtime_data = RuntimeData(client, bootstrap)
     _async_register_devices(hass, entry)
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: OskSenseConfigEntry) -> bool:
+async def async_unload_entry(
+    hass: HomeAssistant, entry: IntegrationConfigEntry
+) -> bool:
     """Unload an OSK Sense config entry."""
     return True
 
 
-def _async_register_devices(hass: HomeAssistant, entry: OskSenseConfigEntry) -> None:
+def _async_register_devices(hass: HomeAssistant, entry: IntegrationConfigEntry) -> None:
     """Register the gateway and currently active nodes."""
     from homeassistant.helpers import device_registry as dr
 

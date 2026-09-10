@@ -2,20 +2,33 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from dataclasses import dataclass
-from typing import Any, Final, TypeGuard, cast
+from typing import TYPE_CHECKING, Any, Final, TypeGuard, cast
 
-from aiohttp import ClientError, ClientSession, ClientTimeout
+from aiohttp import (
+    ClientError,
+    ClientSession,
+    ClientTimeout,
+    ClientWebSocketResponse,
+    WSServerHandshakeError,
+)
 from yarl import URL
+
+if TYPE_CHECKING:
+    from .protocol import ProtocolManifest
+    from .stream import GatewayStream
 
 JsonObject = dict[str, Any]
 
 DEFAULT_TIMEOUT: Final = 10.0
 MAX_RESPONSE_SIZE: Final = 1024 * 1024
+MAX_STREAM_MESSAGE_SIZE: Final = 1024
 SUPPORTED_API_VERSIONS: Final = frozenset({1})
 SUPPORTED_STREAM_VERSIONS: Final = frozenset({1})
+CLIENT_NAME: Final = "home-assistant/0.1.0"
 
 _LOWER_HEX_128 = re.compile(r"^[0-9a-f]{32}$")
 _UPPER_HEX_UID = re.compile(r"^[0-9A-F]{20}$")
@@ -26,23 +39,23 @@ _SEMVER = re.compile(
 )
 
 
-class OskSenseApiError(Exception):
+class GatewayApiError(Exception):
     """Base exception for the OSK Sense external API client."""
 
 
-class CannotConnectError(OskSenseApiError):
+class CannotConnectError(GatewayApiError):
     """The gateway could not be reached before the request timed out."""
 
 
-class AuthenticationError(OskSenseApiError):
+class AuthenticationError(GatewayApiError):
     """The bearer token was rejected by the gateway."""
 
 
-class InvalidResponseError(OskSenseApiError):
+class InvalidResponseError(GatewayApiError):
     """The gateway response does not match the external API contract."""
 
 
-class ApiResponseError(OskSenseApiError):
+class ApiResponseError(GatewayApiError):
     """The gateway returned a non-success HTTP response."""
 
     def __init__(self, status: int, error_code: str | None = None) -> None:
@@ -54,7 +67,7 @@ class ApiResponseError(OskSenseApiError):
         super().__init__(detail)
 
 
-class UnsupportedVersionError(OskSenseApiError):
+class UnsupportedVersionError(GatewayApiError):
     """The gateway exposes an API or stream version this client cannot use."""
 
     def __init__(self, api_version: int, stream_version: int) -> None:
@@ -142,7 +155,7 @@ def normalize_base_url(host: str) -> str:
     return str(normalized).rstrip("/")
 
 
-class OskSenseApiClient:
+class GatewayApiClient:
     """Read the versioned OSK Sense external REST API."""
 
     def __init__(
@@ -161,6 +174,7 @@ class OskSenseApiClient:
         self._token = token
         self._session = session
         self._timeout = ClientTimeout(total=timeout)
+        self._timeout_seconds = timeout
 
     @property
     def base_url(self) -> str:
@@ -187,6 +201,45 @@ class OskSenseApiClient:
             raise UnsupportedVersionError(info.api_version, info.stream_version)
         return GatewayBootstrap(info, await self.async_get_nodes())
 
+    async def async_open_stream(
+        self,
+        bootstrap: GatewayBootstrap,
+        *,
+        manifest: ProtocolManifest | None = None,
+    ) -> GatewayStream:
+        """Open and validate one telemetry stream through its initial snapshot."""
+        from .stream import GatewayStream
+
+        websocket = await self._async_connect_websocket()
+        stream = GatewayStream(self, websocket, bootstrap, manifest=manifest)
+        try:
+            await stream.async_read_snapshot()
+        except BaseException:
+            await websocket.close()
+            raise
+        return stream
+
+    async def _async_connect_websocket(self) -> ClientWebSocketResponse:
+        """Open the authenticated gateway WebSocket transport."""
+        try:
+            async with asyncio.timeout(self._timeout_seconds):
+                return await self._session.ws_connect(
+                    f"{self._base_url}/ws",
+                    headers={
+                        "Authorization": f"Bearer {self._token}",
+                        "X-Client": CLIENT_NAME,
+                    },
+                    autoclose=True,
+                    autoping=True,
+                    max_msg_size=MAX_STREAM_MESSAGE_SIZE,
+                )
+        except WSServerHandshakeError as error:
+            if error.status in (401, 403):
+                raise AuthenticationError("invalid bearer token") from error
+            raise CannotConnectError("cannot open telemetry stream") from error
+        except (TimeoutError, ClientError, OSError) as error:
+            raise CannotConnectError("cannot open telemetry stream") from error
+
     async def _async_get_json(self, path: str, *, authenticated: bool) -> JsonObject:
         headers = {"Accept": "application/json"}
         if authenticated:
@@ -208,7 +261,7 @@ class OskSenseApiClient:
                     raise InvalidResponseError("response exceeds size limit")
                 if response.content_type != "application/json":
                     raise InvalidResponseError("response is not JSON")
-        except (AuthenticationError, ApiResponseError, InvalidResponseError):
+        except AuthenticationError, ApiResponseError, InvalidResponseError:
             raise
         except (TimeoutError, ClientError, OSError) as error:
             raise CannotConnectError("cannot connect to gateway") from error
@@ -227,7 +280,7 @@ def _read_error_code(body: bytes, content_type: str) -> str | None:
         return None
     try:
         value: object = json.loads(body)
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except UnicodeDecodeError, json.JSONDecodeError:
         return None
     if isinstance(value, dict):
         error = cast(dict[object, object], value).get("error")

@@ -47,7 +47,7 @@ BOOTSTRAP = GatewayBootstrap(
 async def test_user_flow_creates_unique_gateway_entry(hass) -> None:
     """Test the complete manual setup flow."""
     with patch(
-        "custom_components.osk_sense.config_flow.OskSenseApiClient"
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
     ) as client_class:
         client = client_class.return_value
         client.base_url = "http://osk-hub.local"
@@ -85,7 +85,7 @@ async def test_user_flow_creates_unique_gateway_entry(hass) -> None:
 async def test_user_flow_reports_client_errors(hass, error, reason) -> None:
     """Test recoverable errors remain on the form."""
     with patch(
-        "custom_components.osk_sense.config_flow.OskSenseApiClient"
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
     ) as client_class:
         client_class.return_value.async_bootstrap = AsyncMock(side_effect=error)
         result = await hass.config_entries.flow.async_init(
@@ -106,7 +106,7 @@ async def test_user_flow_rejects_duplicate_gateway(hass) -> None:
     entry = MockConfigEntry(domain=DOMAIN, unique_id=BOOTSTRAP.info.gateway_id)
     entry.add_to_hass(hass)
     with patch(
-        "custom_components.osk_sense.config_flow.OskSenseApiClient"
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
     ) as client_class:
         client_class.return_value.async_bootstrap = AsyncMock(return_value=BOOTSTRAP)
         result = await hass.config_entries.flow.async_init(

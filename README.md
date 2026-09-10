@@ -18,6 +18,11 @@ python -m unittest tests.test_protocol -v
 The REST client is async and independent of Home Assistant. Callers inject their
 own `aiohttp.ClientSession`; the client never owns or closes it.
 
+The gateway WebSocket client is independent of Home Assistant as well. It
+validates `HELLO`, reconciles registry generations, accepts only a complete
+snapshot, and decodes attributed node telemetry through the vendored protocol
+manifest before exposing live events.
+
 The custom integration targets Home Assistant 2026.8 or newer. Add OSK Sense
 from **Settings → Devices & services**, then enter the gateway host and a bearer
 token with the `telemetry:read` scope.

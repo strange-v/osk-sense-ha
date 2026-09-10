@@ -14,8 +14,8 @@ from .api import (
     ApiResponseError,
     AuthenticationError,
     CannotConnectError,
+    GatewayApiClient,
     InvalidResponseError,
-    OskSenseApiClient,
     UnsupportedVersionError,
 )
 from .const import CONF_TOKEN, DOMAIN
@@ -42,7 +42,7 @@ class OskSenseConfigFlow(ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
         if user_input is not None:
             try:
-                client = OskSenseApiClient(
+                client = GatewayApiClient(
                     user_input[CONF_HOST],
                     user_input[CONF_TOKEN],
                     async_get_clientsession(self.hass),
@@ -56,7 +56,7 @@ class OskSenseConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "invalid_auth"
             except UnsupportedVersionError:
                 errors["base"] = "unsupported_version"
-            except (ApiResponseError, InvalidResponseError):
+            except ApiResponseError, InvalidResponseError:
                 errors["base"] = "invalid_response"
             except Exception:
                 _LOGGER.exception("Unexpected error while connecting to OSK Sense Hub")

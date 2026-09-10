@@ -13,9 +13,9 @@ from custom_components.osk_sense.api import (
     ApiResponseError,
     AuthenticationError,
     CannotConnectError,
+    GatewayApiClient,
     GatewayBootstrap,
     InvalidResponseError,
-    OskSenseApiClient,
     UnsupportedVersionError,
     normalize_base_url,
 )
@@ -83,7 +83,7 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
         assert server is not None
         port = server.sockets[0].getsockname()[1]
         self.session = ClientSession()
-        self.client = OskSenseApiClient(f"127.0.0.1:{port}", "test-token", self.session)
+        self.client = GatewayApiClient(f"127.0.0.1:{port}", "test-token", self.session)
 
     async def asyncTearDown(self) -> None:
         await self.session.close()
@@ -179,7 +179,7 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
         with socket.socket() as temporary_socket:
             temporary_socket.bind(("127.0.0.1", 0))
             port = temporary_socket.getsockname()[1]
-        client = OskSenseApiClient(
+        client = GatewayApiClient(
             f"127.0.0.1:{port}", "token", self.session, timeout=0.2
         )
         with self.assertRaises(CannotConnectError):
