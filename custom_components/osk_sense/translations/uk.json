@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Підключення до OSK Sense Hub",
+        "description": "Створіть токен API лише для читання у вебінтерфейсі шлюзу, а потім введіть адресу шлюзу й токен.",
+        "data": {
+          "host": "Адреса",
+          "token": "Токен API"
+        },
+        "data_description": {
+          "host": "DNS-ім’я, IP-адреса або HTTP URL шлюзу.",
+          "token": "Bearer-токен із дозволом telemetry:read."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Не вдалося підключитися до шлюзу.",
+      "invalid_auth": "Токен API недійсний.",
+      "invalid_host": "Введіть коректну HTTP-адресу шлюзу без шляху.",
+      "invalid_response": "Шлюз повернув некоректну відповідь.",
+      "unknown": "Сталася неочікувана помилка.",
+      "unsupported_version": "Ця версія API або потоку шлюзу не підтримується."
+    },
+    "abort": {
+      "already_configured": "Цей шлюз уже налаштовано."
+    }
+  }
+}
+

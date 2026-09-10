@@ -1,0 +1,12 @@
+homeassistant:
+
+frontend:
+
+config:
+
+http:
+
+logger:
+  default: info
+  logs:
+    custom_components.osk_sense: debug

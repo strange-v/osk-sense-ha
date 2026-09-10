@@ -1,0 +1,31 @@
+{
+  "title": "OSK Sense",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to OSK Sense Hub",
+        "description": "Create a read-only API token in the gateway web interface, then enter the gateway host and token.",
+        "data": {
+          "host": "Host",
+          "token": "API token"
+        },
+        "data_description": {
+          "host": "DNS name, IP address, or HTTP URL of the gateway.",
+          "token": "Bearer token with the telemetry:read scope."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the gateway.",
+      "invalid_auth": "The API token is invalid.",
+      "invalid_host": "Enter a valid HTTP gateway host without a path.",
+      "invalid_response": "The gateway returned an invalid response.",
+      "unknown": "An unexpected error occurred.",
+      "unsupported_version": "This gateway API or stream version is not supported."
+    },
+    "abort": {
+      "already_configured": "This gateway is already configured."
+    }
+  }
+}
+

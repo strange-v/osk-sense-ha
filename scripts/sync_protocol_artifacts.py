@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import shutil
-
+from pathlib import Path
 
 ARTIFACTS = (
     "protocol-manifest.json",
@@ -36,4 +35,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

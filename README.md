@@ -12,5 +12,29 @@ python scripts/sync_protocol_artifacts.py
 Run the dependency-free protocol tests with:
 
 ```powershell
-python -m unittest discover -v
+python -m unittest tests.test_protocol -v
 ```
+
+The REST client is async and independent of Home Assistant. Callers inject their
+own `aiohttp.ClientSession`; the client never owns or closes it.
+
+The custom integration targets Home Assistant 2026.8 or newer. Add OSK Sense
+from **Settings → Devices & services**, then enter the gateway host and a bearer
+token with the `telemetry:read` scope.
+
+The recommended development environment is the repository dev container. In
+VS Code, run **Dev Containers: Rebuild and Reopen in Container**. Then run the
+complete suite, including the Home Assistant config-flow tests, with:
+
+```bash
+python -m pytest -v
+```
+
+Start a development Home Assistant instance with:
+
+```bash
+bash scripts/develop
+```
+
+Home Assistant will be available at <http://localhost:8123>. Its local runtime
+configuration is stored in the ignored `config` directory.

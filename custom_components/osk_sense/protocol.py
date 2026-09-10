@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import struct
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Final
-
 
 JsonObject = dict[str, Any]
 
@@ -149,9 +148,7 @@ class ProtocolManifest:
             values[field["name"]] = self._field_value(field, value)
         return DecodedTelemetry(profile_id, profile["name"], raw, values)
 
-    def decode_stream(
-        self, data: bytes
-    ) -> DecodedStreamMessage | UnknownStreamMessage:
+    def decode_stream(self, data: bytes) -> DecodedStreamMessage | UnknownStreamMessage:
         """Decode one binary gateway WebSocket message."""
         prefix_size = self.gateway_stream["common_prefix_size"]
         if len(data) < prefix_size:
@@ -234,4 +231,3 @@ class ProtocolManifest:
             scale = field["scale"]
             return raw * scale["numerator"] / scale["denominator"]
         return raw
-

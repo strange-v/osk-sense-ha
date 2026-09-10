@@ -2,27 +2,21 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 import json
-from pathlib import Path
 import unittest
+from copy import deepcopy
+from pathlib import Path
 
 from custom_components.osk_sense.protocol import (
-    DecodeError,
     DecodedStreamMessage,
+    DecodeError,
     ManifestError,
     ProtocolManifest,
     UnknownProfileError,
     UnknownStreamMessage,
 )
 
-
-DATA = (
-    Path(__file__).parents[1]
-    / "custom_components"
-    / "osk_sense"
-    / "protocol_data"
-)
+DATA = Path(__file__).parents[1] / "custom_components" / "osk_sense" / "protocol_data"
 
 
 def load_json(name: str) -> dict:
@@ -112,4 +106,3 @@ class ProtocolDecoderTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
