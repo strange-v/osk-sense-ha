@@ -18,6 +18,10 @@
 - Raw pulse count alongside an optional converted total, including metric,
   non-metric, and custom units.
 - Local integration icon and logo assets.
+- Downloadable diagnostics with redacted credentials, network details, and
+  hardware identifiers.
+- Real-hardware smoke test with one gateway and one temperature node in the Home
+  Assistant dev environment.
 - Home Assistant dev container and automated tests.
 
 ## Configuration and discovery
@@ -29,7 +33,8 @@
 
 ## Release readiness
 
-- Exercise setup, reconnect, rename, registry change, and long-offline behavior on
-  real hardware.
-- Add diagnostics with gateway information and redacted configuration data.
+- Exercise gateway reconnect, node rename, registry changes, and long-offline
+  behavior on real hardware.
+- Expand real-hardware coverage to binary-state and pulse-counter profiles and to
+  gateways with multiple nodes.
 - Complete user documentation, HACS metadata, CI, and release packaging.
