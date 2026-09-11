@@ -7,29 +7,16 @@
 - Async REST client, config flow, and gateway/node device registration.
 - Validated WebSocket client with HELLO, snapshot, registry reconciliation, and
   telemetry decoding.
+- Per-entry stream supervisor with bounded reconnect backoff and clean shutdown.
+- Runtime registry/latest-telemetry state with wrapping sequence deduplication.
+- Device registry refresh after gateway or node metadata changes.
+- Manifest-driven sensor and binary-sensor platforms with stable unique IDs.
+- Entity availability for disconnected gateways and telemetry older than 2h15m.
 - Home Assistant dev container and automated tests.
 
-## Next: Home Assistant runtime
+## Next: Runtime hardening
 
-- Add one background stream task per config entry.
-- Reconnect with bounded exponential backoff after disconnects or invalid state.
-- Maintain the current registry and latest telemetry per durable node identity.
-- Apply wrapping sequence comparison and ignore duplicate or stale telemetry.
-- Distinguish entity state correctly:
-  - no telemetry in a completed snapshot: `unknown`;
-  - disconnected gateway: `unavailable`;
-  - no update for 2 hours 15 minutes: `unavailable`.
-- Refresh HA devices after `REGISTRY_CHANGED`, including gateway/node renames.
 - Add focused runtime tests for reconnects, registry races, stale data, and unload.
-
-## Entity platforms
-
-- Create `sensor` entities from manifest fields for supported profiles.
-- Create `binary_sensor` entities for binary-state fields.
-- Publish voltage, temperature, humidity, pressure, RSSI, timestamps, and raw pulse
-  count with stable unique IDs based on `device_uid` and `field.name`.
-- Map units, device classes, state classes, diagnostics, and availability to Home
-  Assistant conventions.
 
 ## Configuration and discovery
 

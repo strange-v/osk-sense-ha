@@ -1,0 +1,175 @@
+"""Sensor entities for OSK Sense nodes."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Final
+
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorEntityDescription,
+    SensorStateClass,
+)
+from homeassistant.const import (
+    PERCENTAGE,
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    EntityCategory,
+    UnitOfElectricPotential,
+    UnitOfPressure,
+    UnitOfTemperature,
+)
+
+from .entity import OskSenseEntity
+from .protocol import ProtocolManifest
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant
+    from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+
+    from .api import NodeInfo
+    from .runtime import GatewayRuntime
+
+
+@dataclass(frozen=True, kw_only=True)
+class OskSensorDescription(SensorEntityDescription):
+    """Describe one OSK Sense numeric or timestamp field."""
+
+    source: str = "telemetry"
+
+
+SENSOR_DESCRIPTIONS: Final = {
+    "supply_voltage": OskSensorDescription(
+        key="supply_voltage",
+        name="Supply voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+    ),
+    "temperature": OskSensorDescription(
+        key="temperature",
+        name="Temperature",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+    ),
+    "humidity": OskSensorDescription(
+        key="humidity",
+        name="Humidity",
+        device_class=SensorDeviceClass.HUMIDITY,
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+    ),
+    "pressure": OskSensorDescription(
+        key="pressure",
+        name="Pressure",
+        device_class=SensorDeviceClass.PRESSURE,
+        native_unit_of_measurement=UnitOfPressure.HPA,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+    ),
+    "count": OskSensorDescription(
+        key="count",
+        name="Pulse count",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+    ),
+    "rssi": OskSensorDescription(
+        key="rssi",
+        name="Signal strength",
+        source="rssi",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    "received_at": OskSensorDescription(
+        key="received_at",
+        name="Last telemetry",
+        source="received_at",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+}
+
+
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry[GatewayRuntime],
+    async_add_entities: AddConfigEntryEntitiesCallback,
+) -> None:
+    """Set up sensors and discover nodes added to the live registry."""
+    runtime = entry.runtime_data
+    manifest = runtime.manifest
+    known: set[tuple[str, str]] = set()
+
+    def add_new_entities() -> None:
+        entities: list[OskSenseSensor] = []
+        for node in runtime.registry.nodes:
+            if node.state != "active":
+                continue
+            keys = _profile_sensor_keys(manifest, node.profile_id)
+            for key in (*keys, "rssi", "received_at"):
+                identity = (node.device_uid, key)
+                if identity in known:
+                    continue
+                known.add(identity)
+                entities.append(OskSenseSensor(runtime, node, SENSOR_DESCRIPTIONS[key]))
+        if entities:
+            async_add_entities(entities)
+
+    add_new_entities()
+    entry.async_on_unload(runtime.async_add_listener(add_new_entities))
+
+
+def _profile_sensor_keys(
+    manifest: ProtocolManifest, profile_id: int
+) -> tuple[str, ...]:
+    profile = manifest.profiles.get(profile_id)
+    if profile is None:
+        return ()
+    fields = [*manifest.telemetry["common_fields"], *profile["fields"]]
+    return tuple(
+        field["name"]
+        for field in fields
+        if field.get("quantity") != "binary_state"
+        and field["name"] in SENSOR_DESCRIPTIONS
+    )
+
+
+class OskSenseSensor(OskSenseEntity, SensorEntity):
+    """Expose one decoded telemetry value."""
+
+    def __init__(
+        self,
+        runtime: GatewayRuntime,
+        node: NodeInfo,
+        description: OskSensorDescription,
+    ) -> None:
+        super().__init__(runtime, node, description.key)
+        self.entity_description = description
+        self._description = description
+        self._update_value()
+
+    def _update_value(self) -> None:
+        """Copy the latest telemetry into the native-value attribute."""
+        event = self._event
+        if event is None:
+            self._attr_native_value = None
+        elif self._description.source == "rssi":
+            self._attr_native_value = event.rssi
+        elif self._description.source == "received_at":
+            self._attr_native_value = datetime.fromtimestamp(
+                event.received_at_unix_ms / 1000, UTC
+            )
+        else:
+            value = event.telemetry.values.get(self._description.key)
+            self._attr_native_value = (
+                value if isinstance(value, int | float | str) else None
+            )

@@ -23,6 +23,12 @@ validates `HELLO`, reconciles registry generations, accepts only a complete
 snapshot, and decodes attributed node telemetry through the vendored protocol
 manifest before exposing live events.
 
+Home Assistant creates manifest-driven sensors for supply voltage, temperature,
+humidity, pressure, and raw pulse count, plus binary sensors for binary-state
+profiles. RSSI and last-telemetry timestamp are available as disabled-by-default
+diagnostic entities. Entities become unavailable while the gateway is disconnected
+or after 2 hours 15 minutes without telemetry.
+
 The custom integration targets Home Assistant 2026.8 or newer. Add OSK Sense
 from **Settings → Devices & services**, then enter the gateway host and a bearer
 token with the `telemetry:read` scope.

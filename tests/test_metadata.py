@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import struct
 import unittest
 from pathlib import Path
 
@@ -38,6 +39,15 @@ class IntegrationMetadataTest(unittest.TestCase):
                     INTEGRATION / "translations" / f"{language}.json"
                 )["config"]
                 self.assertEqual(_shape(strings), _shape(translation))
+
+    def test_local_brand_images_are_valid_pngs(self) -> None:
+        """Ensure the packaged icon and logo have usable PNG canvases."""
+        expected_sizes = {"icon.png": (512, 512), "logo.png": (512, 512)}
+        for filename, expected_size in expected_sizes.items():
+            with self.subTest(filename):
+                data = (INTEGRATION / "brand" / filename).read_bytes()
+                self.assertEqual(b"\x89PNG\r\n\x1a\n", data[:8])
+                self.assertEqual(expected_size, struct.unpack(">II", data[16:24]))
 
 
 if __name__ == "__main__":

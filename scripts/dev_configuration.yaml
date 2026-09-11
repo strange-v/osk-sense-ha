@@ -6,6 +6,10 @@ config:
 
 http:
 
+recorder:
+
+history:
+
 logger:
   default: info
   logs:

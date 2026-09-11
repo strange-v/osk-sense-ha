@@ -23,6 +23,7 @@ namespaces = true
 [tool.setuptools.package-data]
 "custom_components.osk_sense" = [
   "*.json",
+  "brand/*.png",
   "protocol_data/*.json",
   "translations/*.json",
 ]

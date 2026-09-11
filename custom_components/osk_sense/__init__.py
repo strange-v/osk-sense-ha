@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -14,23 +13,17 @@ from .api import (
     AuthenticationError,
     CannotConnectError,
     GatewayApiClient,
-    GatewayBootstrap,
     InvalidResponseError,
     UnsupportedVersionError,
 )
 from .const import CONF_TOKEN, DOMAIN, MANUFACTURER
+from .protocol import ProtocolManifest
+from .runtime import GatewayRuntime
 
-
-@dataclass(frozen=True, slots=True)
-class RuntimeData:
-    """Runtime state owned by one config entry."""
-
-    client: GatewayApiClient
-    bootstrap: GatewayBootstrap
-
+PLATFORMS = ("sensor", "binary_sensor")
 
 if TYPE_CHECKING:
-    type IntegrationConfigEntry = ConfigEntry[RuntimeData]
+    type IntegrationConfigEntry = ConfigEntry[GatewayRuntime]
 else:
     type IntegrationConfigEntry = Any
 
@@ -38,12 +31,14 @@ else:
 async def async_setup_entry(hass: HomeAssistant, entry: IntegrationConfigEntry) -> bool:
     """Set up an OSK Sense gateway from a config entry."""
     from homeassistant.const import CONF_HOST
+    from homeassistant.core import callback
     from homeassistant.exceptions import (
         ConfigEntryAuthFailed,
         ConfigEntryError,
         ConfigEntryNotReady,
     )
     from homeassistant.helpers.aiohttp_client import async_get_clientsession
+    from homeassistant.helpers.start import async_at_started
 
     client = GatewayApiClient(
         entry.data[CONF_HOST],
@@ -59,8 +54,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntegrationConfigEntry) 
     except (ApiResponseError, InvalidResponseError, UnsupportedVersionError) as error:
         raise ConfigEntryError("Invalid or unsupported OSK Sense response") from error
 
-    entry.runtime_data = RuntimeData(client, bootstrap)
+    manifest = await hass.async_add_executor_job(ProtocolManifest.load_default)
+    entry.runtime_data = GatewayRuntime(client, bootstrap, manifest=manifest)
     _async_register_devices(hass, entry)
+    registered_state = [bootstrap.info, bootstrap.registry]
+
+    def async_refresh_devices() -> None:
+        runtime = entry.runtime_data
+        current_state = [runtime.bootstrap.info, runtime.registry]
+        if current_state != registered_state:
+            _async_register_devices(hass, entry)
+            registered_state[:] = current_state
+
+    entry.runtime_data.async_add_listener(async_refresh_devices)
+
+    @callback
+    def async_start_stream(_: HomeAssistant) -> None:
+        entry.async_create_background_task(
+            hass,
+            entry.runtime_data.async_run(),
+            f"{DOMAIN} stream {entry.entry_id}",
+        )
+
+    entry.async_on_unload(async_at_started(hass, async_start_stream))
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
@@ -68,15 +85,16 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: IntegrationConfigEntry
 ) -> bool:
     """Unload an OSK Sense config entry."""
-    return True
+    await entry.runtime_data.async_stop()
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 def _async_register_devices(hass: HomeAssistant, entry: IntegrationConfigEntry) -> None:
     """Register the gateway and currently active nodes."""
     from homeassistant.helpers import device_registry as dr
 
-    bootstrap = entry.runtime_data.bootstrap
-    info = bootstrap.info
+    runtime = entry.runtime_data
+    info = runtime.bootstrap.info
     registry = dr.async_get(hass)
     gateway = registry.async_get_or_create(
         config_entry_id=entry.entry_id,
@@ -88,7 +106,7 @@ def _async_register_devices(hass: HomeAssistant, entry: IntegrationConfigEntry) 
         serial_number=info.gateway_id,
         sw_version=info.firmware_version,
     )
-    for node in bootstrap.registry.nodes:
+    for node in runtime.registry.nodes:
         if node.state != "active":
             continue
         registry.async_get_or_create(
