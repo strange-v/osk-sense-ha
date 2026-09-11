@@ -12,19 +12,20 @@
 - Device registry refresh after gateway or node metadata changes.
 - Manifest-driven sensor and binary-sensor platforms with stable unique IDs.
 - Entity availability for disconnected gateways and telemetry older than 2h15m.
+- HA lifecycle coverage for deferred startup, push updates, and clean unload.
+- Recorder/history support and sensible display precision for numeric sensors.
+- Per-node pulse-counter options for units per pulse, unit, and device class.
+- Raw pulse count alongside an optional converted total, including metric,
+  non-metric, and custom units.
+- Local integration icon and logo assets.
 - Home Assistant dev container and automated tests.
-
-## Next: Runtime hardening
-
-- Add focused runtime tests for reconnects, registry races, stale data, and unload.
 
 ## Configuration and discovery
 
-- Add options for node type overrides where the profile is insufficient.
-- Add pulse-counter options: units per pulse, unit, and device class.
-- Publish both the always-present raw counter and the configured converted total.
-- Handle gateway hostname changes without creating a duplicate config entry.
-- Add mDNS discovery after manual setup is stable.
+- Evaluate node type overrides if a future profile cannot describe a device
+  unambiguously.
+- Add mDNS discovery and update a gateway's address by its stable gateway ID
+  without creating a duplicate config entry.
 
 ## Release readiness
 

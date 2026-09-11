@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Final
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any, Final, cast
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -21,6 +23,12 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 
+from .const import (
+    CONF_DEVICE_CLASS,
+    CONF_PULSE_COUNTERS,
+    CONF_UNIT,
+    CONF_UNITS_PER_PULSE,
+)
 from .entity import OskSenseEntity
 from .protocol import ProtocolManifest
 
@@ -38,6 +46,7 @@ class OskSensorDescription(SensorEntityDescription):
     """Describe one OSK Sense numeric or timestamp field."""
 
     source: str = "telemetry"
+    units_per_pulse: Decimal | None = None
 
 
 SENSOR_DESCRIPTIONS: Final = {
@@ -121,11 +130,55 @@ async def async_setup_entry(
                     continue
                 known.add(identity)
                 entities.append(OskSenseSensor(runtime, node, SENSOR_DESCRIPTIONS[key]))
+            converted = _pulse_counter_description(entry.options, node.device_uid)
+            if converted is not None:
+                identity = (node.device_uid, converted.key)
+                if identity not in known:
+                    known.add(identity)
+                    entities.append(OskSenseSensor(runtime, node, converted))
         if entities:
             async_add_entities(entities)
 
     add_new_entities()
     entry.async_on_unload(runtime.async_add_listener(add_new_entities))
+
+
+def _pulse_counter_description(
+    options: Mapping[str, Any], device_uid: str
+) -> OskSensorDescription | None:
+    """Build the configured physical-total sensor for a pulse counter."""
+    counters = options.get(CONF_PULSE_COUNTERS)
+    if not isinstance(counters, dict):
+        return None
+    typed_counters = cast(dict[str, object], counters)
+    config = typed_counters.get(device_uid)
+    if not isinstance(config, dict):
+        return None
+    typed_config = cast(dict[str, object], config)
+    try:
+        factor = Decimal(str(typed_config[CONF_UNITS_PER_PULSE]))
+        unit = str(typed_config[CONF_UNIT])
+        configured_class = str(typed_config[CONF_DEVICE_CLASS])
+        device_class = (
+            None if configured_class == "none" else SensorDeviceClass(configured_class)
+        )
+    except KeyError, ValueError:
+        return None
+    if not factor.is_finite() or factor <= 0 or not unit:
+        return None
+
+    exponent = factor.normalize().as_tuple().exponent
+    precision = max(0, min(6, -exponent)) if isinstance(exponent, int) else 0
+    return OskSensorDescription(
+        key="converted_total",
+        name="Total",
+        source="converted_total",
+        device_class=device_class,
+        native_unit_of_measurement=unit,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=precision,
+        units_per_pulse=factor,
+    )
 
 
 def _profile_sensor_keys(
@@ -167,6 +220,14 @@ class OskSenseSensor(OskSenseEntity, SensorEntity):
         elif self._description.source == "received_at":
             self._attr_native_value = datetime.fromtimestamp(
                 event.received_at_unix_ms / 1000, UTC
+            )
+        elif self._description.source == "converted_total":
+            count = event.telemetry.values.get("count")
+            self._attr_native_value = (
+                Decimal(str(count)) * self._description.units_per_pulse
+                if isinstance(count, int | float)
+                and self._description.units_per_pulse is not None
+                else None
             )
         else:
             value = event.telemetry.values.get(self._description.key)

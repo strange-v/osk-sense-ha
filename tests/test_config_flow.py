@@ -23,10 +23,19 @@ from custom_components.osk_sense.api import (
     GatewayInfo,
     GatewayUiInfo,
     InvalidResponseError,
+    NodeInfo,
     NodeRegistry,
     UnsupportedVersionError,
 )
-from custom_components.osk_sense.const import CONF_TOKEN, DOMAIN
+from custom_components.osk_sense.const import (
+    CONF_DEVICE_CLASS,
+    CONF_PULSE_COUNTERS,
+    CONF_TOKEN,
+    CONF_UNIT,
+    CONF_UNITS_PER_PULSE,
+    DOMAIN,
+)
+from custom_components.osk_sense.runtime import GatewayRuntime
 
 BOOTSTRAP = GatewayBootstrap(
     info=GatewayInfo(
@@ -41,6 +50,19 @@ BOOTSTRAP = GatewayBootstrap(
     ),
     registry=NodeRegistry(1, ()),
 )
+
+PULSE_NODE = NodeInfo(
+    7,
+    "102132435465768798A9",
+    "Water meter",
+    6,
+    "1.3.0",
+    "active",
+    True,
+    None,
+    -70,
+)
+PULSE_BOOTSTRAP = GatewayBootstrap(BOOTSTRAP.info, NodeRegistry(2, (PULSE_NODE,)))
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
@@ -119,3 +141,57 @@ async def test_user_flow_rejects_duplicate_gateway(hass) -> None:
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_flow_configures_nonmetric_pulse_total(hass) -> None:
+    """Test configuring a converted water total in US gallons."""
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    entry.runtime_data = GatewayRuntime(AsyncMock(), PULSE_BOOTSTRAP)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "init"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"device_uid": PULSE_NODE.device_uid}
+    )
+    assert result["step_id"] == "counter"
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_UNITS_PER_PULSE: 0.01,
+            CONF_DEVICE_CLASS: "water",
+            CONF_UNIT: "gal",
+        },
+    )
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_PULSE_COUNTERS][PULSE_NODE.device_uid] == {
+        CONF_UNITS_PER_PULSE: 0.01,
+        CONF_DEVICE_CLASS: "water",
+        CONF_UNIT: "gal",
+    }
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_options_flow_rejects_incompatible_unit(hass) -> None:
+    """Test that a volume unit cannot be assigned to an energy sensor."""
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+    entry.runtime_data = GatewayRuntime(AsyncMock(), PULSE_BOOTSTRAP)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"device_uid": PULSE_NODE.device_uid}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_UNITS_PER_PULSE: 1,
+            CONF_DEVICE_CLASS: "energy",
+            CONF_UNIT: "gal",
+        },
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {CONF_UNIT: "incompatible_unit"}

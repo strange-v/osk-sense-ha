@@ -26,6 +26,46 @@
     "abort": {
       "already_configured": "This gateway is already configured."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure a pulse counter",
+        "description": "Choose the pulse-counter node whose pulses you want to convert to a physical total.",
+        "data": { "device_uid": "Pulse counter" }
+      },
+      "counter": {
+        "title": "Configure converted total",
+        "description": "The converted total is calculated as pulse count × units per pulse. The raw pulse count remains available.",
+        "data": {
+          "units_per_pulse": "Units per pulse",
+          "device_class": "Measurement type",
+          "unit": "Unit"
+        },
+        "data_description": {
+          "units_per_pulse": "Physical quantity represented by one pulse.",
+          "unit": "Choose a Home Assistant unit or enter a custom unit when Measurement type is None."
+        }
+      }
+    },
+    "error": {
+      "unit_required": "Enter a unit.",
+      "incompatible_unit": "This unit is not compatible with the selected measurement type."
+    },
+    "abort": {
+      "not_loaded": "Load the integration before changing pulse-counter options.",
+      "no_pulse_counters": "No active pulse-counter nodes were found."
+    }
+  },
+  "selector": {
+    "pulse_device_class": {
+      "options": {
+        "water": "Water",
+        "gas": "Gas",
+        "energy": "Energy",
+        "volume": "Volume",
+        "none": "None / custom"
+      }
+    }
   }
 }
-

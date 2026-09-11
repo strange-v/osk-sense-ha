@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import time
 import unittest
+from decimal import Decimal
 from unittest.mock import AsyncMock, patch
+
+from homeassistant.components.sensor import SensorDeviceClass
 
 from custom_components.osk_sense.api import (
     GatewayBootstrap,
@@ -23,6 +26,7 @@ from custom_components.osk_sense.sensor import (
     SENSOR_DESCRIPTIONS,
     OskSenseSensor,
     _profile_sensor_keys,  # pyright: ignore[reportPrivateUsage]
+    _pulse_counter_description,  # pyright: ignore[reportPrivateUsage]
 )
 from custom_components.osk_sense.stream import TelemetryEvent
 
@@ -105,6 +109,48 @@ class EntityMappingTest(unittest.TestCase):
     def test_humidity_is_displayed_as_whole_percent(self) -> None:
         description = SENSOR_DESCRIPTIONS["humidity"]
         self.assertEqual(0, description.suggested_display_precision)
+
+    def test_pulse_counter_can_expose_converted_nonmetric_total(self) -> None:
+        runtime = _runtime(6, {"count": 123})
+        node = runtime.registry.nodes[0]
+        description = _pulse_counter_description(
+            {
+                "pulse_counters": {
+                    node.device_uid: {
+                        "units_per_pulse": 0.01,
+                        "unit": "gal",
+                        "device_class": "water",
+                    }
+                }
+            },
+            node.device_uid,
+        )
+
+        self.assertIsNotNone(description)
+        assert description is not None
+        entity = OskSenseSensor(runtime, node, description)
+        self.assertEqual(Decimal("1.23"), entity.native_value)
+        self.assertEqual("gal", entity.native_unit_of_measurement)
+        self.assertEqual(SensorDeviceClass.WATER, entity.device_class)
+        self.assertEqual(2, entity.suggested_display_precision)
+
+    def test_pulse_counter_custom_unit_has_no_device_class(self) -> None:
+        description = _pulse_counter_description(
+            {
+                "pulse_counters": {
+                    "counter": {
+                        "units_per_pulse": 2.5,
+                        "unit": "items",
+                        "device_class": "none",
+                    }
+                }
+            },
+            "counter",
+        )
+
+        self.assertIsNotNone(description)
+        assert description is not None
+        self.assertIsNone(description.device_class)
 
     def test_no_snapshot_telemetry_is_unknown_but_available(self) -> None:
         runtime = _runtime(2, {})
