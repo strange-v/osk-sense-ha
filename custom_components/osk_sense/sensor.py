@@ -29,7 +29,7 @@ from .const import (
     CONF_UNIT,
     CONF_UNITS_PER_PULSE,
 )
-from .entity import OskSenseEntity
+from .entity import OskSenseEntity, OskSenseGatewayEntity
 from .protocol import ProtocolManifest
 
 if TYPE_CHECKING:
@@ -107,6 +107,39 @@ SENSOR_DESCRIPTIONS: Final = {
     ),
 }
 
+GATEWAY_SENSOR_DESCRIPTIONS: Final = (
+    OskSensorDescription(
+        key="active_nodes",
+        name="Active nodes",
+        source="active_nodes",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    OskSensorDescription(
+        key="last_restart",
+        name="Last restart",
+        source="last_restart",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    OskSensorDescription(
+        key="last_stream_message",
+        name="Last stream message",
+        source="last_stream_message",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    OskSensorDescription(
+        key="reconnect_count",
+        name="Reconnect count",
+        source="reconnect_count",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -117,6 +150,11 @@ async def async_setup_entry(
     runtime = entry.runtime_data
     manifest = runtime.manifest
     known: set[tuple[str, str]] = set()
+
+    async_add_entities(
+        OskSenseGatewaySensor(runtime, description)
+        for description in GATEWAY_SENSOR_DESCRIPTIONS
+    )
 
     def add_new_entities() -> None:
         entities: list[OskSenseSensor] = []
@@ -234,3 +272,40 @@ class OskSenseSensor(OskSenseEntity, SensorEntity):
             self._attr_native_value = (
                 value if isinstance(value, int | float | str) else None
             )
+
+
+class OskSenseGatewaySensor(OskSenseGatewayEntity, SensorEntity):
+    """Expose health and status information for the gateway."""
+
+    def __init__(
+        self, runtime: GatewayRuntime, description: OskSensorDescription
+    ) -> None:
+        super().__init__(runtime, description.key)
+        self.entity_description = description
+        self._description = description
+        self._restart_source: tuple[str, int] | None = None
+        self._update_value()
+
+    def _update_value(self) -> None:
+        """Copy the selected gateway runtime value into native state."""
+        if self._description.source == "active_nodes":
+            self._attr_native_value = sum(
+                node.state == "active" for node in self._runtime.registry.nodes
+            )
+        elif self._description.source == "last_restart":
+            info = self._runtime.bootstrap.info
+            source = (info.boot_id, self._runtime.gateway_started_at_unix_ms)
+            if source != self._restart_source:
+                self._restart_source = source
+                self._attr_native_value = datetime.fromtimestamp(
+                    self._runtime.gateway_started_at_unix_ms / 1000, UTC
+                )
+        elif self._description.source == "last_stream_message":
+            received_at = self._runtime.last_stream_message_at_unix_ms
+            self._attr_native_value = (
+                datetime.fromtimestamp(received_at / 1000, UTC)
+                if received_at is not None
+                else None
+            )
+        else:
+            self._attr_native_value = self._runtime.reconnect_count

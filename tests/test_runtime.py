@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from custom_components.osk_sense.api import (
     GatewayBootstrap,
@@ -37,6 +37,7 @@ def _bootstrap(nodes: tuple[NodeInfo, ...] | None = None) -> GatewayBootstrap:
         GatewayUiInfo("ready", "0.1.0", "0.8"),
         "ESP32-S3",
         "osk-hub",
+        12345,
     )
     return GatewayBootstrap(info, NodeRegistry(42, nodes or (_node(),)))
 
@@ -82,6 +83,16 @@ class _BusyStream(_Stream):
 
 
 class GatewayRuntimeTest(unittest.IsolatedAsyncioTestCase):
+    def test_gateway_uptime_advances_from_rest_snapshot(self) -> None:
+        with patch(
+            "custom_components.osk_sense.runtime.time.monotonic", return_value=100.0
+        ):
+            runtime = GatewayRuntime(AsyncMock(), _bootstrap())
+        with patch(
+            "custom_components.osk_sense.runtime.time.monotonic", return_value=105.9
+        ):
+            self.assertEqual(12350, runtime.gateway_uptime_seconds)
+
     def test_wrapping_sequence_comparison(self) -> None:
         self.assertTrue(sequence_is_newer(11, 10))
         self.assertFalse(sequence_is_newer(10, 10))
@@ -126,6 +137,8 @@ class GatewayRuntimeTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({}, runtime.latest)
         self.assertEqual(43, runtime.registry.generation)
         self.assertEqual([1.0], sleeps)
+        self.assertEqual(1, runtime.reconnect_count)
+        self.assertIsNotNone(runtime.last_stream_message_at_unix_ms)
         # connect, new telemetry, registry, disconnect
         self.assertEqual(4, notifications)
         self.assertTrue(stream.closed)

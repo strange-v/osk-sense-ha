@@ -20,21 +20,21 @@
 - Local integration icon and logo assets.
 - Downloadable diagnostics with redacted credentials, network details, and
   hardware identifiers.
-- Real-hardware smoke test with one gateway and one temperature node in the Home
-  Assistant dev environment.
+- Gateway health entities for connection, active nodes, last restart, last stream
+  message, and reconnect count.
+- Real-hardware validation with one gateway and one temperature node, including
+  restart, uptime, Ethernet recovery, reconnect metrics, stream timestamps, and
+  node renaming.
 - Home Assistant dev container and automated tests.
 
 ## Configuration and discovery
 
-- Evaluate node type overrides if a future profile cannot describe a device
-  unambiguously.
 - Add mDNS discovery and update a gateway's address by its stable gateway ID
   without creating a duplicate config entry.
 
 ## Release readiness
 
-- Exercise gateway reconnect, node rename, registry changes, and long-offline
-  behavior on real hardware.
+- Exercise registry changes and long-offline behavior on real hardware.
 - Expand real-hardware coverage to binary-state and pulse-counter profiles and to
   gateways with multiple nodes.
 - Complete user documentation, HACS metadata, CI, and release packaging.

@@ -26,6 +26,7 @@ JsonObject = dict[str, Any]
 DEFAULT_TIMEOUT: Final = 10.0
 MAX_RESPONSE_SIZE: Final = 1024 * 1024
 MAX_STREAM_MESSAGE_SIZE: Final = 1024
+WEBSOCKET_HEARTBEAT_SECONDS: Final = 30.0
 SUPPORTED_API_VERSIONS: Final = frozenset({1})
 SUPPORTED_STREAM_VERSIONS: Final = frozenset({1})
 CLIENT_NAME: Final = "home-assistant/0.1.0"
@@ -99,6 +100,7 @@ class GatewayInfo:
     ui: GatewayUiInfo
     board: str
     hostname: str
+    uptime_seconds: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +233,7 @@ class GatewayApiClient:
                     },
                     autoclose=True,
                     autoping=True,
+                    heartbeat=WEBSOCKET_HEARTBEAT_SECONDS,
                     max_msg_size=MAX_STREAM_MESSAGE_SIZE,
                 )
         except WSServerHandshakeError as error:
@@ -299,6 +302,7 @@ def _parse_gateway_info(document: JsonObject) -> GatewayInfo:
     ui_version = _string(ui_document, "version")
     if ui_version and _SEMVER.fullmatch(ui_version) is None:
         raise InvalidResponseError("ui.version is not SemVer")
+    uptime_seconds = _uint(document, "uptime_seconds", 0xFFFFFFFF)
     return GatewayInfo(
         firmware_version=firmware,
         api_version=api_version,
@@ -312,6 +316,7 @@ def _parse_gateway_info(document: JsonObject) -> GatewayInfo:
         ),
         board=_string(document, "board"),
         hostname=_string(document, "hostname"),
+        uptime_seconds=uptime_seconds,
     )
 
 

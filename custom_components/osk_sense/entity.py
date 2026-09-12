@@ -105,3 +105,29 @@ class OskSenseEntity(Entity):
         if self._cancel_stale_timer is not None:
             self._cancel_stale_timer()
             self._cancel_stale_timer = None
+
+
+class OskSenseGatewayEntity(Entity):
+    """Base for an entity belonging to the OSK Sense gateway itself."""
+
+    _attr_has_entity_name = True
+
+    def __init__(self, runtime: GatewayRuntime, key: str) -> None:
+        self._runtime = runtime
+        self._attr_unique_id = f"{runtime.bootstrap.info.gateway_id}_{key}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, runtime.bootstrap.info.gateway_id)},
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to gateway runtime updates."""
+        self.async_on_remove(self._runtime.async_add_listener(self._handle_update))
+
+    @callback
+    def _handle_update(self) -> None:
+        self._update_value()
+        self.async_write_ha_state()
+
+    @callback
+    def _update_value(self) -> None:
+        """Copy current gateway runtime data into the entity state."""

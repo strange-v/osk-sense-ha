@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections.abc import Callable, Coroutine
 from typing import Any, Final
 
@@ -41,10 +42,17 @@ class GatewayRuntime:
     ) -> None:
         self.client = client
         self.bootstrap = bootstrap
+        self.gateway_started_at_unix_ms = (
+            int(time.time() * 1000) - bootstrap.info.uptime_seconds * 1000
+        )
         self.manifest = manifest or ProtocolManifest.load_default()
         self.registry = bootstrap.registry
         self.latest: dict[str, TelemetryEvent] = {}
         self.connected = False
+        self.last_stream_message_at_unix_ms: int | None = None
+        self.reconnect_count = 0
+        self._uptime_base_seconds = bootstrap.info.uptime_seconds
+        self._uptime_observed_at = time.monotonic()
         self._sleep = sleep
         self._listeners: set[RuntimeListener] = set()
         self._stopping = False
@@ -54,6 +62,22 @@ class GatewayRuntime:
         """Subscribe to runtime state changes."""
         self._listeners.add(listener)
         return lambda: self._listeners.discard(listener)
+
+    @property
+    def gateway_uptime_seconds(self) -> int:
+        """Return current gateway uptime estimated from its latest REST snapshot."""
+        elapsed = max(0.0, time.monotonic() - self._uptime_observed_at)
+        return self._uptime_base_seconds + int(elapsed)
+
+    def _apply_bootstrap(self, bootstrap: GatewayBootstrap) -> None:
+        """Store refreshed gateway information and anchor its uptime locally."""
+        if bootstrap.info.boot_id != self.bootstrap.info.boot_id:
+            self.gateway_started_at_unix_ms = (
+                int(time.time() * 1000) - bootstrap.info.uptime_seconds * 1000
+            )
+        self.bootstrap = bootstrap
+        self._uptime_base_seconds = bootstrap.info.uptime_seconds
+        self._uptime_observed_at = time.monotonic()
 
     async def async_run(self) -> None:
         """Connect forever, backing off after any failed stream session."""
@@ -65,8 +89,9 @@ class GatewayRuntime:
                     current_bootstrap, manifest=self.manifest
                 )
                 self._stream = stream
-                self.bootstrap = current_bootstrap
+                self._apply_bootstrap(current_bootstrap)
                 self._apply_snapshot(stream)
+                self.last_stream_message_at_unix_ms = int(time.time() * 1000)
                 self.connected = True
                 self._notify()
                 delay = 1.0
@@ -85,6 +110,8 @@ class GatewayRuntime:
                     await self._stream.async_close()
                     self._stream = None
                 if self.connected:
+                    if not self._stopping:
+                        self.reconnect_count += 1
                     self.connected = False
                     self._notify()
 
@@ -111,6 +138,7 @@ class GatewayRuntime:
         self.latest = {event.node.device_uid: event for event in snapshot.telemetry}
 
     def _apply_event(self, event: TelemetryEvent | RegistryUpdatedEvent) -> None:
+        self.last_stream_message_at_unix_ms = int(time.time() * 1000)
         if isinstance(event, RegistryUpdatedEvent):
             self.registry = event.registry
             nodes_by_uid = {node.device_uid: node for node in event.registry.nodes}

@@ -40,6 +40,7 @@ def _gateway_info() -> GatewayInfo:
         ui=GatewayUiInfo("ready", "0.1.0", "0.8"),
         board="ESP32-S3",
         hostname="osk-hub",
+        uptime_seconds=12345,
     )
 
 

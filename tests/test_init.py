@@ -58,6 +58,7 @@ BOOTSTRAP = GatewayBootstrap(
         ui=GatewayUiInfo("ready", "0.1.0", "0.8"),
         board="ESP32-S3",
         hostname="osk-hub-test",
+        uptime_seconds=12345,
     ),
     registry=NodeRegistry(1, (NODE,)),
 )
@@ -101,9 +102,19 @@ async def test_entry_lifecycle_entities_and_deferred_stream(hass) -> None:
         voltage_entity_id = entity_registry.async_get_entity_id(
             "sensor", DOMAIN, f"{DEVICE_UID}_supply_voltage"
         )
+        gateway_connection_id = entity_registry.async_get_entity_id(
+            "binary_sensor", DOMAIN, f"{BOOTSTRAP.info.gateway_id}_connection"
+        )
+        active_nodes_id = entity_registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{BOOTSTRAP.info.gateway_id}_active_nodes"
+        )
         assert temperature_entity_id is not None
         assert voltage_entity_id is not None
+        assert gateway_connection_id is not None
+        assert active_nodes_id is not None
         assert hass.states.get(temperature_entity_id).state == STATE_UNAVAILABLE
+        assert hass.states.get(gateway_connection_id).state == "off"
+        assert hass.states.get(active_nodes_id).state == "1"
 
         runtime = entry.runtime_data
         runtime.connected = True
@@ -123,6 +134,7 @@ async def test_entry_lifecycle_entities_and_deferred_stream(hass) -> None:
 
         assert hass.states.get(temperature_entity_id).state == "23.5"
         assert hass.states.get(voltage_entity_id).state == "3.303"
+        assert hass.states.get(gateway_connection_id).state == "on"
 
         hass.set_state(CoreState.running)
         hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)

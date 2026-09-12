@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import unittest
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
@@ -18,12 +19,15 @@ from custom_components.osk_sense.api import (
 )
 from custom_components.osk_sense.binary_sensor import (
     OskSenseBinarySensor,
+    OskSenseGatewayConnection,
     _profile_has_state,  # pyright: ignore[reportPrivateUsage]
 )
 from custom_components.osk_sense.protocol import DecodedTelemetry, ProtocolManifest
 from custom_components.osk_sense.runtime import GatewayRuntime
 from custom_components.osk_sense.sensor import (
+    GATEWAY_SENSOR_DESCRIPTIONS,
     SENSOR_DESCRIPTIONS,
+    OskSenseGatewaySensor,
     OskSenseSensor,
     _profile_sensor_keys,  # pyright: ignore[reportPrivateUsage]
     _pulse_counter_description,  # pyright: ignore[reportPrivateUsage]
@@ -31,7 +35,12 @@ from custom_components.osk_sense.sensor import (
 from custom_components.osk_sense.stream import TelemetryEvent
 
 
-def _runtime(profile_id: int, values: dict[str, int | float]) -> GatewayRuntime:
+def _runtime(
+    profile_id: int,
+    values: dict[str, int | float],
+    *,
+    uptime_seconds: int = 12345,
+) -> GatewayRuntime:
     node = NodeInfo(
         7,
         "102132435465768798A9",
@@ -52,6 +61,7 @@ def _runtime(profile_id: int, values: dict[str, int | float]) -> GatewayRuntime:
         GatewayUiInfo("ready", "0.1.0", "0.8"),
         "ESP32-S3",
         "osk-hub",
+        uptime_seconds,
     )
     runtime = GatewayRuntime(
         AsyncMock(), GatewayBootstrap(info, NodeRegistry(1, (node,)))
@@ -109,6 +119,39 @@ class EntityMappingTest(unittest.TestCase):
     def test_humidity_is_displayed_as_whole_percent(self) -> None:
         description = SENSOR_DESCRIPTIONS["humidity"]
         self.assertEqual(0, description.suggested_display_precision)
+
+    def test_gateway_health_entities(self) -> None:
+        runtime = _runtime(2, {"temperature": 23.5}, uptime_seconds=3600)
+        runtime.last_stream_message_at_unix_ms = 1_770_000_000_123
+        runtime.reconnect_count = 3
+        descriptions = {
+            description.key: description for description in GATEWAY_SENSOR_DESCRIPTIONS
+        }
+
+        active_nodes = OskSenseGatewaySensor(runtime, descriptions["active_nodes"])
+        last_restart = OskSenseGatewaySensor(runtime, descriptions["last_restart"])
+        last_message = OskSenseGatewaySensor(
+            runtime, descriptions["last_stream_message"]
+        )
+        reconnects = OskSenseGatewaySensor(runtime, descriptions["reconnect_count"])
+        connection = OskSenseGatewayConnection(runtime)
+
+        self.assertEqual(1, active_nodes.native_value)
+        assert isinstance(last_restart.native_value, datetime)
+        self.assertAlmostEqual(
+            3600,
+            (datetime.now(UTC) - last_restart.native_value).total_seconds(),
+            delta=1,
+        )
+        self.assertEqual(
+            datetime.fromtimestamp(1_770_000_000.123, UTC),
+            last_message.native_value,
+        )
+        self.assertEqual(3, reconnects.native_value)
+        self.assertIs(connection.is_on, True)
+        self.assertEqual(
+            f"{runtime.bootstrap.info.gateway_id}_connection", connection.unique_id
+        )
 
     def test_pulse_counter_can_expose_converted_nonmetric_total(self) -> None:
         runtime = _runtime(6, {"count": 123})

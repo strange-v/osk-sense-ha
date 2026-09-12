@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from homeassistant.components.binary_sensor import BinarySensorEntity
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+)
+from homeassistant.const import EntityCategory
 
-from .entity import OskSenseEntity
+from .entity import OskSenseEntity, OskSenseGatewayEntity
 from .protocol import ProtocolManifest
 
 if TYPE_CHECKING:
@@ -27,6 +31,8 @@ async def async_setup_entry(
     runtime = entry.runtime_data
     manifest = runtime.manifest
     known: set[str] = set()
+
+    async_add_entities([OskSenseGatewayConnection(runtime)])
 
     def add_new_entities() -> None:
         entities: list[OskSenseBinarySensor] = []
@@ -69,3 +75,19 @@ class OskSenseBinarySensor(OskSenseEntity, BinarySensorEntity):
             self._attr_is_on = None
         else:
             self._attr_is_on = bool(value)
+
+
+class OskSenseGatewayConnection(OskSenseGatewayEntity, BinarySensorEntity):
+    """Report whether the gateway telemetry stream is connected."""
+
+    _attr_name = "Connection"
+    _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, runtime: GatewayRuntime) -> None:
+        super().__init__(runtime, "connection")
+        self._update_value()
+
+    def _update_value(self) -> None:
+        """Copy the current stream connection state."""
+        self._attr_is_on = self._runtime.connected

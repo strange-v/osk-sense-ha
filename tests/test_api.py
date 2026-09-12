@@ -5,11 +5,13 @@ from __future__ import annotations
 import socket
 import unittest
 from copy import deepcopy
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from aiohttp import ClientSession, web
 
 from custom_components.osk_sense.api import (
+    WEBSOCKET_HEARTBEAT_SECONDS,
     ApiResponseError,
     AuthenticationError,
     CannotConnectError,
@@ -29,6 +31,7 @@ INFO = {
     "ui": {"state": "ready", "version": "0.1.0", "required_firmware": "0.8"},
     "board": "Waveshare ESP32-S3-ETH + PoE",
     "hostname": "osk-hub-a085e3e6cc20",
+    "uptime_seconds": 12345,
 }
 
 NODES = {
@@ -166,6 +169,18 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(InvalidResponseError, "gateway_id"):
             await self.client.async_get_info()
 
+    async def test_gateway_uptime_is_validated(self) -> None:
+        """Accept the required unsigned gateway uptime."""
+        self.info["uptime_seconds"] = 4_000_000_000
+        new_info = await self.client.async_get_info()
+        self.assertEqual(4_000_000_000, new_info.uptime_seconds)
+
+        for invalid in (None, -1, True, "12345"):
+            with self.subTest(invalid):
+                self.info["uptime_seconds"] = invalid
+                with self.assertRaisesRegex(InvalidResponseError, "uptime_seconds"):
+                    await self.client.async_get_info()
+
     async def test_inconsistent_telemetry_metadata_is_rejected(self) -> None:
         self.nodes["nodes"][1]["rssi"] = -70
         with self.assertRaisesRegex(InvalidResponseError, "must be absent"):
@@ -184,6 +199,22 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaises(CannotConnectError):
             await client.async_get_info()
+
+    async def test_websocket_uses_client_heartbeat(self) -> None:
+        """Ensure a silent broken connection is detected without server traffic."""
+        websocket = AsyncMock()
+        with patch.object(
+            self.session,
+            "ws_connect",
+            AsyncMock(return_value=websocket),
+        ) as connect:
+            result = await self.client._async_connect_websocket()  # pyright: ignore[reportPrivateUsage]
+
+        self.assertIs(result, websocket)
+        self.assertEqual(
+            WEBSOCKET_HEARTBEAT_SECONDS,
+            connect.await_args.kwargs["heartbeat"],
+        )
 
 
 class NormalizeBaseUrlTest(unittest.TestCase):

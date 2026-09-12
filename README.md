@@ -29,6 +29,14 @@ profiles. RSSI and last-telemetry timestamp are available as disabled-by-default
 diagnostic entities. Entities become unavailable while the gateway is disconnected
 or after 2 hours 15 minutes without telemetry.
 
+The gateway device exposes connection state, active-node count, and last restart.
+Last stream message and reconnect count are available as disabled-by-default
+diagnostic entities.
+
+The telemetry WebSocket uses a 30-second client heartbeat. A silent broken
+connection is normally detected after the missed pong timeout, then reconnects
+with bounded exponential backoff from 1 to 60 seconds.
+
 The custom integration targets Home Assistant 2026.8 or newer. Add OSK Sense
 from **Settings → Devices & services**, then enter the gateway host and a bearer
 token with the `telemetry:read` scope.

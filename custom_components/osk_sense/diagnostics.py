@@ -53,17 +53,22 @@ async def async_get_config_entry_diagnostics(
             }
         )
 
+    gateway = asdict(runtime.bootstrap.info)
+    gateway["uptime_seconds"] = runtime.gateway_uptime_seconds
+
     return {
         "config_entry": {
             "data": async_redact_data(dict(entry.data), _CONFIG_REDACT),
             "options": _redacted_options(dict(entry.options), aliases),
         },
-        "gateway": async_redact_data(asdict(runtime.bootstrap.info), _GATEWAY_REDACT),
+        "gateway": async_redact_data(gateway, _GATEWAY_REDACT),
         "runtime": {
             "connected": runtime.connected,
             "registry_generation": runtime.registry.generation,
             "node_count": len(runtime.registry.nodes),
             "telemetry_count": len(runtime.latest),
+            "last_stream_message_at_unix_ms": (runtime.last_stream_message_at_unix_ms),
+            "reconnect_count": runtime.reconnect_count,
         },
         "nodes": nodes,
     }

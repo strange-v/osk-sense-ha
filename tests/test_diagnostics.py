@@ -53,6 +53,7 @@ async def test_config_entry_diagnostics_are_useful_and_redacted(hass) -> None:
         GatewayUiInfo("ready", "0.1.0", "0.8"),
         "ESP32-S3",
         "private-hub.local",
+        12345,
     )
     runtime = GatewayRuntime(
         AsyncMock(), GatewayBootstrap(info, NodeRegistry(42, (node,)))
@@ -92,6 +93,8 @@ async def test_config_entry_diagnostics_are_useful_and_redacted(hass) -> None:
         "registry_generation": 42,
         "node_count": 1,
         "telemetry_count": 1,
+        "last_stream_message_at_unix_ms": None,
+        "reconnect_count": 0,
     }
     assert diagnostics["nodes"][0]["identifier"] == "node_1"
     assert diagnostics["nodes"][0]["telemetry"]["values"] == {"count": 123}

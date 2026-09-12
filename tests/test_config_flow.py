@@ -47,6 +47,7 @@ BOOTSTRAP = GatewayBootstrap(
         ui=GatewayUiInfo("ready", "0.1.0", "0.8"),
         board="Waveshare ESP32-S3-ETH + PoE",
         hostname="osk-hub-test",
+        uptime_seconds=12345,
     ),
     registry=NodeRegistry(1, ()),
 )
