@@ -24,7 +24,25 @@ from custom_components.osk_sense.stream import (
 
 
 def _node(uid: str = "102132435465768798A9", *, profile_id: int = 2) -> NodeInfo:
-    return NodeInfo(7, uid, "Bedroom", profile_id, "1.3.0", "active", False, None, None)
+    return NodeInfo(
+        7,
+        uid,
+        "Bedroom",
+        profile_id,
+        "1.3.0",
+        "active",
+        False,
+        None,
+        None,
+        2,
+        "auto",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
 
 
 def _bootstrap(nodes: tuple[NodeInfo, ...] | None = None) -> GatewayBootstrap:

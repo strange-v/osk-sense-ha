@@ -55,6 +55,14 @@ def _node(*, profile_id: int = 2, display_name: str = "Bedroom") -> NodeInfo:
         has_telemetry=True,
         last_seen_at_ms=1_770_000_000_000,
         rssi=-74,
+        max_power_level=2,
+        power_policy="auto",
+        fixed_power_level=None,
+        tx_power_target=2,
+        tx_power_level=2,
+        radio_fallback=False,
+        supply_limited=False,
+        downlink_rssi=-71,
     )
 
 
@@ -82,7 +90,7 @@ def _snapshot_control(kind: int, generation: int = 42) -> bytes:
 
 
 def _telemetry(*, profile_id: int = 2, sequence: int = 11) -> bytes:
-    payload = bytes.fromhex("40E40C2E09")
+    payload = bytes.fromhex("40E40C02BA2E09")
     return (
         _prefix(3, sequence)
         + struct.pack("<BHQhB", 7, profile_id, 1_770_000_000_123, -71, len(payload))
@@ -137,9 +145,16 @@ class StreamClientTest(unittest.IsolatedAsyncioTestCase):
                         "profile_id": node.profile_id,
                         "firmware": node.firmware,
                         "state": node.state,
+                        "max_power_level": node.max_power_level,
+                        "power_policy": node.power_policy,
+                        "tx_power_target": node.tx_power_target,
                         "has_telemetry": node.has_telemetry,
                         "last_seen_at_ms": node.last_seen_at_ms,
                         "rssi": node.rssi,
+                        "tx_power_level": node.tx_power_level,
+                        "radio_fallback": node.radio_fallback,
+                        "supply_limited": node.supply_limited,
+                        "downlink_rssi": node.downlink_rssi,
                     }
                     for node in self.registry.nodes
                 ],

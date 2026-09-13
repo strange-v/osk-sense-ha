@@ -51,6 +51,14 @@ NODE = NodeInfo(
     has_telemetry=False,
     last_seen_at_ms=None,
     rssi=None,
+    max_power_level=2,
+    power_policy="auto",
+    fixed_power_level=None,
+    tx_power_target=None,
+    tx_power_level=None,
+    radio_fallback=None,
+    supply_limited=None,
+    downlink_rssi=None,
 )
 
 BOOTSTRAP = GatewayBootstrap(
@@ -127,6 +135,15 @@ async def test_entry_lifecycle_entities_and_deferred_stream(hass) -> None:
         voltage_entity_id = entity_registry.async_get_entity_id(
             "sensor", DOMAIN, f"{DEVICE_UID}_supply_voltage"
         )
+        power_level_entity_id = entity_registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{DEVICE_UID}_tx_power_level"
+        )
+        downlink_rssi_entity_id = entity_registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{DEVICE_UID}_downlink_rssi"
+        )
+        radio_fallback_entity_id = entity_registry.async_get_entity_id(
+            "binary_sensor", DOMAIN, f"{DEVICE_UID}_radio_fallback"
+        )
         gateway_connection_id = entity_registry.async_get_entity_id(
             "binary_sensor", DOMAIN, f"{BOOTSTRAP.info.gateway_id}_connection"
         )
@@ -135,6 +152,9 @@ async def test_entry_lifecycle_entities_and_deferred_stream(hass) -> None:
         )
         assert temperature_entity_id is not None
         assert voltage_entity_id is not None
+        assert power_level_entity_id is not None
+        assert downlink_rssi_entity_id is not None
+        assert radio_fallback_entity_id is not None
         assert gateway_connection_id is not None
         assert active_nodes_id is not None
         assert entity_registry.async_get(stale_entity.entity_id) is None

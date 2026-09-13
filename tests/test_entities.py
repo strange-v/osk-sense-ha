@@ -18,9 +18,10 @@ from custom_components.osk_sense.api import (
     NodeRegistry,
 )
 from custom_components.osk_sense.binary_sensor import (
+    BINARY_SENSOR_DESCRIPTIONS,
     OskSenseBinarySensor,
     OskSenseGatewayConnection,
-    _profile_has_state,  # pyright: ignore[reportPrivateUsage]
+    _profile_binary_keys,  # pyright: ignore[reportPrivateUsage]
 )
 from custom_components.osk_sense.protocol import DecodedTelemetry, ProtocolManifest
 from custom_components.osk_sense.runtime import GatewayRuntime
@@ -51,6 +52,14 @@ def _runtime(
         True,
         1_770_000_000_000,
         -71,
+        2,
+        "auto",
+        None,
+        2,
+        2,
+        False,
+        False,
+        -70,
     )
     info = GatewayInfo(
         "0.8.0",
@@ -83,15 +92,28 @@ class EntityMappingTest(unittest.TestCase):
     def test_manifest_fields_are_assigned_to_platforms(self) -> None:
         manifest = ProtocolManifest.load_default()
         self.assertEqual(
-            ("supply_voltage", "temperature", "humidity", "pressure"),
+            (
+                "supply_voltage",
+                "tx_power_level",
+                "downlink_rssi",
+                "temperature",
+                "humidity",
+                "pressure",
+            ),
             _profile_sensor_keys(manifest, 4),
         )
         self.assertEqual(
-            ("supply_voltage", "temperature", "humidity"),
+            (
+                "supply_voltage",
+                "tx_power_level",
+                "downlink_rssi",
+                "temperature",
+                "humidity",
+            ),
             _profile_sensor_keys(manifest, 7),
         )
-        self.assertTrue(_profile_has_state(manifest, 7))
-        self.assertFalse(_profile_has_state(manifest, 4))
+        self.assertEqual(("radio_fallback", "state"), _profile_binary_keys(manifest, 7))
+        self.assertEqual(("radio_fallback",), _profile_binary_keys(manifest, 4))
 
     def test_sensor_value_identity_and_availability(self) -> None:
         runtime = _runtime(2, {"supply_voltage": 3.2, "temperature": 23.5})
@@ -119,6 +141,31 @@ class EntityMappingTest(unittest.TestCase):
     def test_humidity_is_displayed_as_whole_percent(self) -> None:
         description = SENSOR_DESCRIPTIONS["humidity"]
         self.assertEqual(0, description.suggested_display_precision)
+
+    def test_radio_diagnostics_map_reported_values(self) -> None:
+        runtime = _runtime(
+            2,
+            {
+                "tx_power_level": 2,
+                "radio_fallback": 1,
+                "downlink_rssi": -70,
+            },
+        )
+        node = runtime.registry.nodes[0]
+        power = OskSenseSensor(runtime, node, SENSOR_DESCRIPTIONS["tx_power_level"])
+        downlink = OskSenseSensor(runtime, node, SENSOR_DESCRIPTIONS["downlink_rssi"])
+        fallback = OskSenseBinarySensor(
+            runtime, node, BINARY_SENSOR_DESCRIPTIONS["radio_fallback"]
+        )
+
+        self.assertEqual(2, power.native_value)
+        self.assertEqual(0, power.suggested_display_precision)
+        self.assertEqual(-70, downlink.native_value)
+        self.assertEqual(SensorDeviceClass.SIGNAL_STRENGTH, downlink.device_class)
+        self.assertIs(fallback.is_on, True)
+        self.assertFalse(power.entity_registry_enabled_default)
+        self.assertFalse(downlink.entity_registry_enabled_default)
+        self.assertFalse(fallback.entity_registry_enabled_default)
 
     def test_gateway_health_entities(self) -> None:
         runtime = _runtime(2, {"temperature": 23.5}, uptime_seconds=3600)
@@ -207,7 +254,9 @@ class EntityMappingTest(unittest.TestCase):
     def test_stale_telemetry_is_unavailable(self) -> None:
         runtime = _runtime(5, {"state": 1})
         node = runtime.registry.nodes[0]
-        entity = OskSenseBinarySensor(runtime, node)
+        entity = OskSenseBinarySensor(
+            runtime, node, BINARY_SENSOR_DESCRIPTIONS["state"]
+        )
         event = runtime.latest[node.device_uid]
 
         with patch(

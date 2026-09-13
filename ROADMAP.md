@@ -13,6 +13,8 @@
 - State-aware node lifecycle: ignore never-active pending/disabled nodes, retain
   temporarily inactive devices as unavailable, and remove devices deleted from the
   gateway registry.
+- Five-byte telemetry prefix with transmit power, radio fallback, and downlink
+  signal diagnostics.
 - Manifest-driven sensor and binary-sensor platforms with stable unique IDs.
 - Entity availability for disconnected gateways and telemetry older than 2h15m.
 - HA lifecycle coverage for deferred startup, push updates, and clean unload.

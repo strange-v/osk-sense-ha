@@ -6,12 +6,13 @@ import json
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 JsonObject = dict[str, Any]
 
 _INTEGER_TYPES: Final[dict[str, tuple[str, int, int]]] = {
     "uint8": ("<B", 0, 0xFF),
+    "int8": ("<b", -0x80, 0x7F),
     "int16_le": ("<h", -0x8000, 0x7FFF),
     "uint16_le": ("<H", 0, 0xFFFF),
     "uint32_le": ("<I", 0, 0xFFFFFFFF),
@@ -117,18 +118,59 @@ class ProtocolManifest:
         for profile in self.profiles.values():
             names: set[str] = set()
             for field in [*common_fields, *profile["fields"]]:
-                name = field["name"]
-                if name in names:
-                    raise ManifestError(
-                        f"duplicate telemetry field {name!r} in profile {profile['id']}"
+                logical_fields = self._validate_bit_fields(field)
+                for logical_field in logical_fields:
+                    name = logical_field["name"]
+                    if name in names:
+                        raise ManifestError(
+                            f"duplicate telemetry field {name!r} in profile "
+                            f"{profile['id']}"
+                        )
+                    names.add(name)
+                    current = (
+                        logical_field.get("quantity"),
+                        logical_field.get("unit"),
                     )
-                names.add(name)
-                current = (field.get("quantity"), field.get("unit"))
-                previous = semantics.setdefault(name, current)
-                if previous != current:
-                    raise ManifestError(
-                        f"telemetry field {name!r} changes quantity or unit"
-                    )
+                    previous = semantics.setdefault(name, current)
+                    if previous != current:
+                        raise ManifestError(
+                            f"telemetry field {name!r} changes quantity or unit"
+                        )
+
+    @staticmethod
+    def _validate_bit_fields(field: JsonObject) -> list[JsonObject]:
+        """Validate and return the logical fields represented by one wire field."""
+        bits = field.get("bits")
+        if bits is None:
+            return [field]
+        if not isinstance(bits, list) or not bits:
+            raise ManifestError("bits must be a non-empty array")
+        encoding = field.get("encoding")
+        if encoding not in _INTEGER_TYPES:
+            raise ManifestError("bit fields require an integer encoding")
+        type_max = _INTEGER_TYPES[encoding][2]
+        covered = 0
+        logical_fields: list[JsonObject] = []
+        for item in cast(list[object], bits):
+            if not isinstance(item, dict):
+                raise ManifestError("each bit field must be an object")
+            logical_field = cast(JsonObject, item)
+            name = logical_field.get("name")
+            mask = logical_field.get("mask")
+            if not isinstance(name, str) or not name:
+                raise ManifestError("bit field name must be a non-empty string")
+            if (
+                not isinstance(mask, int)
+                or isinstance(mask, bool)
+                or mask <= 0
+                or mask > type_max
+            ):
+                raise ManifestError(f"bit field {name!r} has an invalid mask")
+            if covered & mask:
+                raise ManifestError(f"bit field {name!r} overlaps another mask")
+            covered |= mask
+            logical_fields.append(logical_field)
+        return logical_fields
 
     def decode_telemetry(self, profile_id: int, data: bytes) -> DecodedTelemetry:
         """Decode and validate one complete v2 radio telemetry frame."""
@@ -144,8 +186,23 @@ class ProtocolManifest:
         values: dict[str, int | float | bytes | str | None] = {}
         for field in [*self.telemetry["common_fields"], *profile["fields"]]:
             value = self._read_field(data, field, raw)
-            raw[field["name"]] = value
-            values[field["name"]] = self._field_value(field, value)
+            bits = field.get("bits")
+            if bits is None:
+                raw[field["name"]] = value
+                values[field["name"]] = self._field_value(field, value)
+                continue
+            if not isinstance(value, int):
+                raise DecodeError("invalid_value")
+            covered = 0
+            for bit in bits:
+                mask = bit["mask"]
+                covered |= mask
+                shift = (mask & -mask).bit_length() - 1
+                bit_value = (value & mask) >> shift
+                raw[bit["name"]] = bit_value
+                values[bit["name"]] = bit_value
+            if value & ~covered:
+                raise DecodeError("invalid_value")
         return DecodedTelemetry(profile_id, profile["name"], raw, values)
 
     def decode_stream(self, data: bytes) -> DecodedStreamMessage | UnknownStreamMessage:

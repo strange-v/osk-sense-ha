@@ -90,8 +90,25 @@ SENSOR_DESCRIPTIONS: Final = {
     ),
     "rssi": OskSensorDescription(
         key="rssi",
-        name="Signal strength",
+        name="Uplink signal strength",
         source="rssi",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    "tx_power_level": OskSensorDescription(
+        key="tx_power_level",
+        name="Transmit power level",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    "downlink_rssi": OskSensorDescription(
+        key="downlink_rssi",
+        name="Downlink signal strength",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         state_class=SensorStateClass.MEASUREMENT,
@@ -239,10 +256,11 @@ def _profile_sensor_keys(
         return ()
     fields = [*manifest.telemetry["common_fields"], *profile["fields"]]
     return tuple(
-        field["name"]
+        logical_field["name"]
         for field in fields
-        if field.get("quantity") != "binary_state"
-        and field["name"] in SENSOR_DESCRIPTIONS
+        for logical_field in field.get("bits", (field,))
+        if logical_field.get("quantity") != "binary_state"
+        and logical_field["name"] in SENSOR_DESCRIPTIONS
     )
 
 

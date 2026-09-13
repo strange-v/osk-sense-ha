@@ -116,6 +116,14 @@ class NodeInfo:
     has_telemetry: bool
     last_seen_at_ms: int | None
     rssi: int | None
+    max_power_level: int
+    power_policy: str
+    fixed_power_level: int | None
+    tx_power_target: int | None
+    tx_power_level: int | None
+    radio_fallback: bool | None
+    supply_limited: bool | None
+    downlink_rssi: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -341,25 +349,87 @@ def _parse_node_registry(document: JsonObject) -> NodeRegistry:
 
 
 def _parse_node(document: JsonObject) -> NodeInfo:
+    max_power_level = _uint(document, "max_power_level", 31)
+    power_policy = _string(document, "power_policy")
+    if power_policy not in ("auto", "fixed"):
+        raise InvalidResponseError("power_policy must be auto or fixed")
+    if power_policy == "fixed":
+        fixed_power_level = _uint(document, "fixed_power_level", max_power_level)
+    elif "fixed_power_level" in document:
+        raise InvalidResponseError("fixed_power_level must be absent for auto policy")
+    else:
+        fixed_power_level = None
+
+    tx_power_target_value: object = document.get("tx_power_target")
+    if "tx_power_target" in document:
+        if (
+            not _is_uint(tx_power_target_value, 31)
+            or tx_power_target_value > max_power_level
+        ):
+            raise InvalidResponseError("tx_power_target must not exceed the ceiling")
+        tx_power_target: int | None = tx_power_target_value
+    else:
+        tx_power_target = None
+
     has_telemetry = document.get("has_telemetry")
     if not isinstance(has_telemetry, bool):
         raise InvalidResponseError("has_telemetry must be a boolean")
     last_seen_value: object = document.get("last_seen_at_ms")
     rssi_value: object = document.get("rssi")
+    tx_power_level_value: object = document.get("tx_power_level")
+    radio_fallback_value: object = document.get("radio_fallback")
+    supply_limited_value: object = document.get("supply_limited")
+    downlink_rssi_value: object = document.get("downlink_rssi")
     if has_telemetry:
         if not _is_uint(last_seen_value, 0xFFFFFFFFFFFFFFFF):
             raise InvalidResponseError("last_seen_at_ms must be an unsigned integer")
         if not _is_int(rssi_value) or not -0x8000 <= rssi_value <= 0x7FFF:
             raise InvalidResponseError("rssi must be a signed 16-bit integer")
+        if (
+            not _is_uint(tx_power_level_value, 31)
+            or tx_power_level_value > max_power_level
+        ):
+            raise InvalidResponseError("tx_power_level must not exceed the ceiling")
+        if not isinstance(radio_fallback_value, bool):
+            raise InvalidResponseError("radio_fallback must be a boolean")
+        if not isinstance(supply_limited_value, bool):
+            raise InvalidResponseError("supply_limited must be a boolean")
+        if "downlink_rssi" in document:
+            if not _is_int(downlink_rssi_value) or not (
+                -0x7F <= downlink_rssi_value <= 0x7F
+            ):
+                raise InvalidResponseError(
+                    "downlink_rssi must be a signed 8-bit integer"
+                )
+            downlink_rssi: int | None = downlink_rssi_value
+        else:
+            downlink_rssi = None
         last_seen: int | None = last_seen_value
         rssi: int | None = rssi_value
-    elif "last_seen_at_ms" in document or "rssi" in document:
+        tx_power_level: int | None = tx_power_level_value
+        radio_fallback: bool | None = radio_fallback_value
+        supply_limited: bool | None = supply_limited_value
+    elif any(
+        key in document
+        for key in (
+            "last_seen_at_ms",
+            "rssi",
+            "tx_power_level",
+            "radio_fallback",
+            "supply_limited",
+            "downlink_rssi",
+        )
+    ):
         raise InvalidResponseError(
             "telemetry metadata must be absent when has_telemetry is false"
         )
     else:
         last_seen = None
         rssi = None
+        tx_power_level = None
+        radio_fallback = None
+        supply_limited = None
+        downlink_rssi = None
 
     return NodeInfo(
         node_id=_uint(document, "node_id", 99, minimum=1),
@@ -371,6 +441,14 @@ def _parse_node(document: JsonObject) -> NodeInfo:
         has_telemetry=has_telemetry,
         last_seen_at_ms=last_seen,
         rssi=rssi,
+        max_power_level=max_power_level,
+        power_policy=power_policy,
+        fixed_power_level=fixed_power_level,
+        tx_power_target=tx_power_target,
+        tx_power_level=tx_power_level,
+        radio_fallback=radio_fallback,
+        supply_limited=supply_limited,
+        downlink_rssi=downlink_rssi,
     )
 
 

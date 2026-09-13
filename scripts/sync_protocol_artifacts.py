@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument(
         "--source",
         type=Path,
-        default=repository.parent / "RadioSensors" / "v2" / "protocol",
+        default=repository.parent / "osk-sense" / "v2" / "protocol",
     )
     args = parser.parse_args()
     destination = repository / "custom_components" / "osk_sense" / "protocol_data"

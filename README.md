@@ -26,8 +26,13 @@ manifest before exposing live events.
 Home Assistant creates manifest-driven sensors for supply voltage, temperature,
 humidity, pressure, and raw pulse count, plus binary sensors for binary-state
 profiles. RSSI and last-telemetry timestamp are available as disabled-by-default
-diagnostic entities. Entities become unavailable while the gateway is disconnected
-or after 2 hours 15 minutes without telemetry.
+diagnostic entities. The five-byte telemetry prefix also provides disabled-by-default
+diagnostics for transmit power level, radio fallback, and downlink signal strength.
+Entities become unavailable while the gateway is disconnected or after 2 hours 15
+minutes without telemetry.
+
+The integration requires node firmware using the five-byte common telemetry prefix;
+the older three-byte telemetry format is not supported.
 
 Only active nodes are added to Home Assistant. If an existing node becomes pending
 or disabled, its device and entities are retained but unavailable. Removing a node

@@ -44,9 +44,16 @@ NODES = {
             "profile_id": 2,
             "firmware": "1.3.0",
             "state": "active",
+            "max_power_level": 2,
+            "power_policy": "auto",
+            "tx_power_target": 2,
             "has_telemetry": True,
             "last_seen_at_ms": 1_770_000_000_000,
             "rssi": -74,
+            "tx_power_level": 2,
+            "radio_fallback": False,
+            "supply_limited": False,
+            "downlink_rssi": -71,
         },
         {
             "node_id": 8,
@@ -55,6 +62,9 @@ NODES = {
             "profile_id": 5,
             "firmware": "1.3.0",
             "state": "future_state",
+            "max_power_level": 2,
+            "power_policy": "fixed",
+            "fixed_power_level": 1,
             "has_telemetry": False,
         },
     ],
@@ -124,7 +134,12 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(INFO["gateway_id"], result.info.gateway_id)
         self.assertEqual(12, result.registry.generation)
         self.assertEqual(2, len(result.registry.nodes))
+        self.assertEqual(2, result.registry.nodes[0].max_power_level)
+        self.assertEqual("auto", result.registry.nodes[0].power_policy)
+        self.assertEqual(2, result.registry.nodes[0].tx_power_level)
+        self.assertEqual(-71, result.registry.nodes[0].downlink_rssi)
         self.assertEqual("future_state", result.registry.nodes[1].state)
+        self.assertEqual(1, result.registry.nodes[1].fixed_power_level)
         self.assertIsNone(self.seen_info_authorization)
         self.assertEqual("Bearer test-token", self.seen_nodes_authorization)
 
@@ -184,6 +199,17 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
     async def test_inconsistent_telemetry_metadata_is_rejected(self) -> None:
         self.nodes["nodes"][1]["rssi"] = -70
         with self.assertRaisesRegex(InvalidResponseError, "must be absent"):
+            await self.client.async_get_nodes()
+
+    async def test_radio_power_metadata_is_validated(self) -> None:
+        node = self.nodes["nodes"][0]
+        node["tx_power_level"] = 3
+        with self.assertRaisesRegex(InvalidResponseError, "ceiling"):
+            await self.client.async_get_nodes()
+
+        node["tx_power_level"] = 2
+        node["power_policy"] = "fixed"
+        with self.assertRaisesRegex(InvalidResponseError, "fixed_power_level"):
             await self.client.async_get_nodes()
 
     async def test_unknown_node_state_is_additive(self) -> None:
