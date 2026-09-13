@@ -66,7 +66,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntegrationConfigEntry) 
             _async_register_devices(hass, entry)
             registered_state[:] = current_state
 
-    entry.runtime_data.async_add_listener(async_refresh_devices)
+    entry.async_on_unload(entry.runtime_data.async_add_listener(async_refresh_devices))
 
     @callback
     def async_start_stream(_: HomeAssistant) -> None:
@@ -90,8 +90,9 @@ async def async_unload_entry(
 
 
 def _async_register_devices(hass: HomeAssistant, entry: IntegrationConfigEntry) -> None:
-    """Register the gateway and currently active nodes."""
+    """Reconcile the gateway and node device registry entries."""
     from homeassistant.helpers import device_registry as dr
+    from homeassistant.helpers import entity_registry as er
 
     runtime = entry.runtime_data
     info = runtime.bootstrap.info
@@ -119,3 +120,22 @@ def _async_register_devices(hass: HomeAssistant, entry: IntegrationConfigEntry) 
             sw_version=node.firmware,
             via_device_id=gateway.id,
         )
+
+    current_node_uids = {node.device_uid for node in runtime.registry.nodes}
+    entity_registry = er.async_get(hass)
+    for device in dr.async_entries_for_config_entry(registry, entry.entry_id):
+        identifiers = {
+            identifier for domain, identifier in device.identifiers if domain == DOMAIN
+        }
+        if (
+            not identifiers
+            or info.gateway_id in identifiers
+            or identifiers & current_node_uids
+        ):
+            continue
+        for entity in er.async_entries_for_device(
+            entity_registry, device.id, include_disabled_entities=True
+        ):
+            if entity.config_entry_id == entry.entry_id:
+                entity_registry.async_remove(entity.entity_id)
+        registry.async_remove_device(device.id)

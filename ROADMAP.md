@@ -10,6 +10,9 @@
 - Per-entry stream supervisor with bounded reconnect backoff and clean shutdown.
 - Runtime registry/latest-telemetry state with wrapping sequence deduplication.
 - Device registry refresh after gateway or node metadata changes.
+- State-aware node lifecycle: ignore never-active pending/disabled nodes, retain
+  temporarily inactive devices as unavailable, and remove devices deleted from the
+  gateway registry.
 - Manifest-driven sensor and binary-sensor platforms with stable unique IDs.
 - Entity availability for disconnected gateways and telemetry older than 2h15m.
 - HA lifecycle coverage for deferred startup, push updates, and clean unload.

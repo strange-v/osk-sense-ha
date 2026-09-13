@@ -29,6 +29,11 @@ profiles. RSSI and last-telemetry timestamp are available as disabled-by-default
 diagnostic entities. Entities become unavailable while the gateway is disconnected
 or after 2 hours 15 minutes without telemetry.
 
+Only active nodes are added to Home Assistant. If an existing node becomes pending
+or disabled, its device and entities are retained but unavailable. Removing a node
+from the gateway registry removes its Home Assistant device and entities; adding the
+same stable device UID again recreates them without duplicates.
+
 The gateway device exposes connection state, active-node count, and last restart.
 Last stream message and reconnect count are available as disabled-by-default
 diagnostic entities.

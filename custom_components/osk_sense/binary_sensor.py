@@ -9,6 +9,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
 )
 from homeassistant.const import EntityCategory
+from homeassistant.helpers import entity_registry as er
 
 from .entity import OskSenseEntity, OskSenseGatewayEntity
 from .protocol import ProtocolManifest
@@ -30,26 +31,38 @@ async def async_setup_entry(
     """Set up binary-state fields and discover newly registered nodes."""
     runtime = entry.runtime_data
     manifest = runtime.manifest
-    known: set[str] = set()
+    tracked: dict[str, OskSenseBinarySensor] = {}
 
     async_add_entities([OskSenseGatewayConnection(runtime)])
 
-    def add_new_entities() -> None:
+    def reconcile_entities() -> None:
+        nodes_by_uid = {node.device_uid: node for node in runtime.registry.nodes}
+        desired = {
+            node.device_uid: node
+            for node in runtime.registry.nodes
+            if node.state == "active" and _profile_has_state(manifest, node.profile_id)
+        }
+        entity_registry = er.async_get(hass)
+        for device_uid, entity in tuple(tracked.items()):
+            node = nodes_by_uid.get(device_uid)
+            if node is not None and (node.state != "active" or device_uid in desired):
+                continue
+            tracked.pop(device_uid)
+            if entity_registry.async_get(entity.entity_id) is not None:
+                entity_registry.async_remove(entity.entity_id)
+
         entities: list[OskSenseBinarySensor] = []
-        for node in runtime.registry.nodes:
-            if node.state != "active" or not _profile_has_state(
-                manifest, node.profile_id
-            ):
+        for device_uid, node in desired.items():
+            if device_uid in tracked:
                 continue
-            if node.device_uid in known:
-                continue
-            known.add(node.device_uid)
-            entities.append(OskSenseBinarySensor(runtime, node))
+            entity = OskSenseBinarySensor(runtime, node)
+            tracked[device_uid] = entity
+            entities.append(entity)
         if entities:
             async_add_entities(entities)
 
-    add_new_entities()
-    entry.async_on_unload(runtime.async_add_listener(add_new_entities))
+    reconcile_entities()
+    entry.async_on_unload(runtime.async_add_listener(reconcile_entities))
 
 
 def _profile_has_state(manifest: ProtocolManifest, profile_id: int) -> bool:

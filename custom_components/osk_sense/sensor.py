@@ -22,6 +22,7 @@ from homeassistant.const import (
     UnitOfPressure,
     UnitOfTemperature,
 )
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_DEVICE_CLASS,
@@ -149,36 +150,47 @@ async def async_setup_entry(
     """Set up sensors and discover nodes added to the live registry."""
     runtime = entry.runtime_data
     manifest = runtime.manifest
-    known: set[tuple[str, str]] = set()
+    tracked: dict[tuple[str, str], OskSenseSensor] = {}
 
     async_add_entities(
         OskSenseGatewaySensor(runtime, description)
         for description in GATEWAY_SENSOR_DESCRIPTIONS
     )
 
-    def add_new_entities() -> None:
-        entities: list[OskSenseSensor] = []
+    def reconcile_entities() -> None:
+        nodes_by_uid = {node.device_uid: node for node in runtime.registry.nodes}
+        desired: dict[tuple[str, str], tuple[NodeInfo, OskSensorDescription]] = {}
         for node in runtime.registry.nodes:
             if node.state != "active":
                 continue
             keys = _profile_sensor_keys(manifest, node.profile_id)
             for key in (*keys, "rssi", "received_at"):
-                identity = (node.device_uid, key)
-                if identity in known:
-                    continue
-                known.add(identity)
-                entities.append(OskSenseSensor(runtime, node, SENSOR_DESCRIPTIONS[key]))
+                desired[(node.device_uid, key)] = (node, SENSOR_DESCRIPTIONS[key])
             converted = _pulse_counter_description(entry.options, node.device_uid)
             if converted is not None:
-                identity = (node.device_uid, converted.key)
-                if identity not in known:
-                    known.add(identity)
-                    entities.append(OskSenseSensor(runtime, node, converted))
+                desired[(node.device_uid, converted.key)] = (node, converted)
+
+        entity_registry = er.async_get(hass)
+        for identity, entity in tuple(tracked.items()):
+            node = nodes_by_uid.get(identity[0])
+            if node is not None and (node.state != "active" or identity in desired):
+                continue
+            tracked.pop(identity)
+            if entity_registry.async_get(entity.entity_id) is not None:
+                entity_registry.async_remove(entity.entity_id)
+
+        entities: list[OskSenseSensor] = []
+        for identity, (node, description) in desired.items():
+            if identity in tracked:
+                continue
+            entity = OskSenseSensor(runtime, node, description)
+            tracked[identity] = entity
+            entities.append(entity)
         if entities:
             async_add_entities(entities)
 
-    add_new_entities()
-    entry.async_on_unload(runtime.async_add_listener(add_new_entities))
+    reconcile_entities()
+    entry.async_on_unload(runtime.async_add_listener(reconcile_entities))
 
 
 def _pulse_counter_description(
