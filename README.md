@@ -51,6 +51,11 @@ The custom integration targets Home Assistant 2026.8 or newer. Add OSK Sense
 from **Settings → Devices & services**, then enter the gateway host and a bearer
 token with the `telemetry:read` scope.
 
+If the gateway rejects a previously configured token, Home Assistant opens a
+reauthentication repair. Enter a replacement `telemetry:read` token; the integration
+verifies that it belongs to the same gateway, updates the config entry, and reloads
+without changing device or entity identities.
+
 The recommended development environment is the repository dev container. In
 VS Code, run **Dev Containers: Rebuild and Reopen in Container**. Then run the
 complete suite, including the Home Assistant config-flow tests, with:

@@ -90,7 +90,7 @@ def _snapshot_control(kind: int, generation: int = 42) -> bytes:
 
 
 def _telemetry(*, profile_id: int = 2, sequence: int = 11) -> bytes:
-    payload = bytes.fromhex("40E40C02BA2E09")
+    payload = bytes.fromhex("4002BAE40C2E09")
     return (
         _prefix(3, sequence)
         + struct.pack("<BHQhB", 7, profile_id, 1_770_000_000_123, -71, len(payload))

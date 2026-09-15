@@ -93,9 +93,9 @@ class EntityMappingTest(unittest.TestCase):
         manifest = ProtocolManifest.load_default()
         self.assertEqual(
             (
-                "supply_voltage",
                 "tx_power_level",
                 "downlink_rssi",
+                "supply_voltage",
                 "temperature",
                 "humidity",
                 "pressure",
@@ -104,9 +104,9 @@ class EntityMappingTest(unittest.TestCase):
         )
         self.assertEqual(
             (
-                "supply_voltage",
                 "tx_power_level",
                 "downlink_rssi",
+                "supply_voltage",
                 "temperature",
                 "humidity",
             ),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
@@ -108,6 +109,53 @@ class OskSenseConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=_USER_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_reauth(
+        self, entry_data: Mapping[str, Any]
+    ) -> ConfigFlowResult:
+        """Start reauthentication after the gateway rejects the token."""
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Validate and store a replacement API token."""
+        errors: dict[str, str] = {}
+        entry = self._get_reauth_entry()
+        if user_input is not None:
+            try:
+                client = GatewayApiClient(
+                    entry.data[CONF_HOST],
+                    user_input[CONF_TOKEN],
+                    async_get_clientsession(self.hass),
+                )
+                bootstrap = await client.async_bootstrap()
+            except ValueError, AuthenticationError:
+                errors["base"] = "invalid_auth"
+            except CannotConnectError:
+                errors["base"] = "cannot_connect"
+            except UnsupportedVersionError:
+                errors["base"] = "unsupported_version"
+            except ApiResponseError, InvalidResponseError:
+                errors["base"] = "invalid_response"
+            except Exception:
+                _LOGGER.exception(
+                    "Unexpected error while reauthenticating OSK Sense Hub"
+                )
+                errors["base"] = "unknown"
+            else:
+                await self.async_set_unique_id(bootstrap.info.gateway_id)
+                self._abort_if_unique_id_mismatch(reason="wrong_gateway")
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data_updates={CONF_TOKEN: user_input[CONF_TOKEN]},
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_TOKEN): str}),
             errors=errors,
         )
 

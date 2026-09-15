@@ -12,6 +12,16 @@
           "host": "DNS-ім’я, IP-адреса або HTTP URL шлюзу.",
           "token": "Bearer-токен із дозволом telemetry:read."
         }
+      },
+      "reauth_confirm": {
+        "title": "Оновлення автентифікації OSK Sense",
+        "description": "Створіть новий токен API лише для читання у вебінтерфейсі шлюзу.",
+        "data": {
+          "token": "Новий токен API"
+        },
+        "data_description": {
+          "token": "Bearer-токен із дозволом telemetry:read."
+        }
       }
     },
     "error": {
@@ -23,7 +33,9 @@
       "unsupported_version": "Ця версія API або потоку шлюзу не підтримується."
     },
     "abort": {
-      "already_configured": "Цей шлюз уже налаштовано."
+      "already_configured": "Цей шлюз уже налаштовано.",
+      "reauth_successful": "Автентифікацію успішно оновлено.",
+      "wrong_gateway": "Новий токен належить іншому шлюзу."
     }
   },
   "options": {

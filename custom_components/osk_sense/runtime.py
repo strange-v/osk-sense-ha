@@ -8,7 +8,7 @@ import time
 from collections.abc import Callable, Coroutine
 from typing import Any, Final
 
-from .api import GatewayApiClient, GatewayBootstrap
+from .api import AuthenticationError, GatewayApiClient, GatewayBootstrap
 from .protocol import ProtocolManifest
 from .stream import GatewayStream, RegistryUpdatedEvent, TelemetryEvent
 
@@ -39,6 +39,7 @@ class GatewayRuntime:
         *,
         manifest: ProtocolManifest | None = None,
         sleep: Sleep = asyncio.sleep,
+        authentication_failed: RuntimeListener | None = None,
     ) -> None:
         self.client = client
         self.bootstrap = bootstrap
@@ -54,6 +55,7 @@ class GatewayRuntime:
         self._uptime_base_seconds = bootstrap.info.uptime_seconds
         self._uptime_observed_at = time.monotonic()
         self._sleep = sleep
+        self._authentication_failed = authentication_failed or (lambda: None)
         self._listeners: set[RuntimeListener] = set()
         self._stopping = False
         self._stream: GatewayStream | None = None
@@ -103,6 +105,10 @@ class GatewayRuntime:
                     await asyncio.sleep(_STREAM_FAIRNESS_DELAY)
             except asyncio.CancelledError:
                 raise
+            except AuthenticationError:
+                _LOGGER.warning("OSK Sense API token is no longer valid")
+                self._authentication_failed()
+                return
             except Exception as error:  # The supervisor must survive bad sessions.
                 _LOGGER.warning("OSK Sense stream session failed: %s", error)
             finally:
@@ -123,6 +129,10 @@ class GatewayRuntime:
                 current_bootstrap = await self.client.async_bootstrap()
             except asyncio.CancelledError:
                 raise
+            except AuthenticationError:
+                _LOGGER.warning("OSK Sense API token is no longer valid")
+                self._authentication_failed()
+                return
             except Exception as error:
                 _LOGGER.warning("OSK Sense re-bootstrap failed: %s", error)
 

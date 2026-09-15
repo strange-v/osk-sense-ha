@@ -105,7 +105,11 @@ class ProtocolDecoderTest(unittest.TestCase):
 
     def test_bit_field_masks_cannot_overlap(self) -> None:
         document = deepcopy(self.manifest_document)
-        radio_state = document["telemetry"]["common_fields"][1]
+        radio_state = next(
+            field
+            for field in document["telemetry"]["common_fields"]
+            if field["name"] == "radio_state"
+        )
         radio_state["bits"][1]["mask"] = 1
         with self.assertRaisesRegex(ManifestError, "overlaps"):
             ProtocolManifest(document)

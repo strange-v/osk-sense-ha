@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from unittest.mock import AsyncMock, patch
 
 try:
-    from homeassistant.config_entries import SOURCE_USER
+    from homeassistant.config_entries import SOURCE_REAUTH, SOURCE_USER
     from homeassistant.const import CONF_HOST
     from homeassistant.data_entry_flow import FlowResultType
 except ModuleNotFoundError as error:
@@ -150,6 +151,126 @@ async def test_user_flow_rejects_duplicate_gateway(hass) -> None:
 
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_reauth_updates_token_and_reloads_entry(hass) -> None:
+    """Test a valid replacement token is stored for the same gateway."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=BOOTSTRAP.info.gateway_id,
+        data={CONF_HOST: "http://osk-hub.local", CONF_TOKEN: "old-token"},
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch(
+            "custom_components.osk_sense.config_flow.GatewayApiClient"
+        ) as client_class,
+        patch.object(
+            hass.config_entries,
+            "async_reload",
+            AsyncMock(return_value=True),
+        ) as reload_entry,
+    ):
+        client_class.return_value.async_bootstrap = AsyncMock(return_value=BOOTSTRAP)
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_REAUTH, "entry_id": entry.entry_id},
+            data=entry.data,
+        )
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "reauth_confirm"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TOKEN: "new-token"}
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    assert entry.data == {
+        CONF_HOST: "http://osk-hub.local",
+        CONF_TOKEN: "new-token",
+    }
+    assert client_class.call_args.args[:2] == (
+        "http://osk-hub.local",
+        "new-token",
+    )
+    reload_entry.assert_awaited_once_with(entry.entry_id)
+
+
+@pytest.mark.parametrize(
+    ("error", "reason"),
+    [
+        (ValueError(), "invalid_auth"),
+        (AuthenticationError(), "invalid_auth"),
+        (CannotConnectError(), "cannot_connect"),
+        (InvalidResponseError(), "invalid_response"),
+        (ApiResponseError(500), "invalid_response"),
+        (UnsupportedVersionError(2, 1), "unsupported_version"),
+        (RuntimeError(), "unknown"),
+    ],
+)
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_reauth_reports_client_errors(hass, error, reason) -> None:
+    """Test reauthentication errors stay on the token form."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=BOOTSTRAP.info.gateway_id,
+        data={CONF_HOST: "http://osk-hub.local", CONF_TOKEN: "old-token"},
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
+    ) as client_class:
+        client_class.return_value.async_bootstrap = AsyncMock(side_effect=error)
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_REAUTH, "entry_id": entry.entry_id},
+            data=entry.data,
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TOKEN: "new-token"}
+        )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"] == {"base": reason}
+    assert entry.data[CONF_TOKEN] == "old-token"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_reauth_rejects_token_for_another_gateway(hass) -> None:
+    """Test a token cannot silently move an entry to another gateway."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=BOOTSTRAP.info.gateway_id,
+        data={CONF_HOST: "http://osk-hub.local", CONF_TOKEN: "old-token"},
+    )
+    entry.add_to_hass(hass)
+    other_bootstrap = replace(
+        BOOTSTRAP,
+        info=replace(BOOTSTRAP.info, gateway_id="f" * 32),
+    )
+    with patch(
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
+    ) as client_class:
+        client_class.return_value.async_bootstrap = AsyncMock(
+            return_value=other_bootstrap
+        )
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_REAUTH, "entry_id": entry.entry_id},
+            data=entry.data,
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TOKEN: "other-token"}
+        )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "wrong_gateway"
+    assert entry.data[CONF_TOKEN] == "old-token"
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

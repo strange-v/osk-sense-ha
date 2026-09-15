@@ -15,6 +15,7 @@
   gateway registry.
 - Five-byte telemetry prefix with transmit power, radio fallback, and downlink
   signal diagnostics.
+- Token reauthentication with gateway identity verification and automatic reload.
 - Manifest-driven sensor and binary-sensor platforms with stable unique IDs.
 - Entity availability for disconnected gateways and telemetry older than 2h15m.
 - HA lifecycle coverage for deferred startup, push updates, and clean unload.
@@ -30,6 +31,7 @@
 - Real-hardware validation with one gateway and one temperature node, including
   restart, uptime, Ethernet recovery, reconnect metrics, stream timestamps, and
   node renaming.
+- Real-hardware validation of binary-state and pulse-counter profiles.
 - Home Assistant dev container and automated tests.
 
 ## Configuration and discovery
@@ -40,6 +42,5 @@
 ## Release readiness
 
 - Exercise registry changes and long-offline behavior on real hardware.
-- Expand real-hardware coverage to binary-state and pulse-counter profiles and to
-  gateways with multiple nodes.
+- Exercise a gateway with multiple nodes on real hardware.
 - Complete user documentation, HACS metadata, CI, and release packaging.

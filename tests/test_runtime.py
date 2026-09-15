@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from custom_components.osk_sense.api import (
+    AuthenticationError,
     GatewayBootstrap,
     GatewayInfo,
     GatewayUiInfo,
@@ -101,6 +102,49 @@ class _BusyStream(_Stream):
 
 
 class GatewayRuntimeTest(unittest.IsolatedAsyncioTestCase):
+    async def test_authentication_failure_starts_reauth_and_stops_retrying(
+        self,
+    ) -> None:
+        client = AsyncMock()
+        client.async_open_stream.side_effect = AuthenticationError("invalid token")
+        authentication_failed = Mock()
+        runtime = GatewayRuntime(
+            client,
+            _bootstrap(),
+            authentication_failed=authentication_failed,
+        )
+
+        await runtime.async_run()
+
+        authentication_failed.assert_called_once_with()
+        client.async_open_stream.assert_awaited_once()
+
+    async def test_rebootstrap_authentication_failure_starts_reauth(self) -> None:
+        node = _node()
+        stream = _Stream(
+            StreamSnapshot(NodeRegistry(42, (node,)), ()),
+            [StreamDisconnectedError("closed")],
+        )
+        client = AsyncMock()
+        client.async_open_stream.return_value = stream
+        client.async_bootstrap.side_effect = AuthenticationError("invalid token")
+        sleep = AsyncMock()
+        authentication_failed = Mock()
+        runtime = GatewayRuntime(
+            client,
+            _bootstrap(),
+            sleep=sleep,
+            authentication_failed=authentication_failed,
+        )
+
+        await runtime.async_run()
+
+        authentication_failed.assert_called_once_with()
+        sleep.assert_awaited_once_with(1.0)
+        client.async_bootstrap.assert_awaited_once_with()
+        self.assertFalse(runtime.connected)
+        self.assertTrue(stream.closed)
+
     def test_gateway_uptime_advances_from_rest_snapshot(self) -> None:
         with patch(
             "custom_components.osk_sense.runtime.time.monotonic", return_value=100.0

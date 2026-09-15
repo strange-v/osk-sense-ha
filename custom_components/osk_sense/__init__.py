@@ -55,7 +55,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntegrationConfigEntry) 
         raise ConfigEntryError("Invalid or unsupported OSK Sense response") from error
 
     manifest = await hass.async_add_executor_job(ProtocolManifest.load_default)
-    entry.runtime_data = GatewayRuntime(client, bootstrap, manifest=manifest)
+
+    @callback
+    def async_authentication_failed() -> None:
+        entry.async_start_reauth(hass)
+
+    entry.runtime_data = GatewayRuntime(
+        client,
+        bootstrap,
+        manifest=manifest,
+        authentication_failed=async_authentication_failed,
+    )
     _async_register_devices(hass, entry)
     registered_state = [bootstrap.info, bootstrap.registry]
 

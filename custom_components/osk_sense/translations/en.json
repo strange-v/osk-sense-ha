@@ -12,6 +12,16 @@
           "host": "DNS name, IP address, or HTTP URL of the gateway.",
           "token": "Bearer token with the telemetry:read scope."
         }
+      },
+      "reauth_confirm": {
+        "title": "Update OSK Sense authentication",
+        "description": "Create a replacement read-only API token in the gateway web interface.",
+        "data": {
+          "token": "New API token"
+        },
+        "data_description": {
+          "token": "Bearer token with the telemetry:read scope."
+        }
       }
     },
     "error": {
@@ -23,7 +33,9 @@
       "unsupported_version": "This gateway API or stream version is not supported."
     },
     "abort": {
-      "already_configured": "This gateway is already configured."
+      "already_configured": "This gateway is already configured.",
+      "reauth_successful": "Authentication was updated successfully.",
+      "wrong_gateway": "The new token belongs to a different gateway."
     }
   },
   "options": {
