@@ -1,74 +1,26 @@
-# osk-sense-ha
-Local Home Assistant integration for OSK Sense Hub. Reads the node registry over REST and streams telemetry from paired OSK Sense nodes over WebSocket. Read-only, no cloud. Install through HACS.
+# OSK Sense for Home Assistant
 
-## Development
+Local, read-only Home Assistant integration for [OSK Sense](https://github.com/strange-v/osk-sense) gateways and their paired sensor nodes. It reads the gateway's node registry over REST and streams telemetry over WebSocket. No cloud account is required.
 
-The canonical wire-format files live in the sibling `osk-sense` repository. Vendor them after every protocol change:
+Requires Home Assistant **2026.3.0 or newer** and an OSK Sense gateway.
 
-```powershell
-python scripts/sync_protocol_artifacts.py
-```
+## Install
 
-Run the dependency-free protocol tests with:
+1. In HACS, open **Custom repositories**, add `https://github.com/strange-v/osk-sense-ha`, and choose **Integration**.
+2. Find **OSK Sense** in HACS and download it. Restart Home Assistant.
+3. In the gateway web UI, open **Connect Home Assistant** and create a connection key. Copy it when shown; the key needs `telemetry:read` access.
+4. In Home Assistant, open **Settings → Devices & services → Add integration**, select **OSK Sense**, and enter the gateway host (for example, `osk-hub-<MAC>.local` or its IP address) and the connection key.
 
-```powershell
-python -m unittest tests.test_protocol -v
-```
+The gateway and Home Assistant must be able to reach each other on the local network. The gateway API uses HTTP, so keep that network trusted. If HACS is unavailable, copy `custom_components/osk_sense` into your Home Assistant `config/custom_components/` directory, restart, and continue at step 3.
 
-The REST client is async and independent of Home Assistant. Callers inject their
-own `aiohttp.ClientSession`; the client never owns or closes it.
+## What appears in Home Assistant
 
-The gateway WebSocket client is independent of Home Assistant as well. It
-validates `HELLO`, reconciles registry generations, accepts only a complete
-snapshot, and decodes attributed node telemetry through the vendored protocol
-manifest before exposing live events.
+The gateway has connection state, active-node count, and last-restart entities. Active nodes have entities for their supported measurements, such as supply voltage, temperature, humidity, pressure, raw pulse count, and binary state. Radio and stream diagnostics are disabled by default; enable them from the entity settings if needed.
 
-Home Assistant creates manifest-driven sensors for supply voltage, temperature,
-humidity, pressure, and raw pulse count, plus binary sensors for binary-state
-profiles. RSSI and last-telemetry timestamp are available as disabled-by-default
-diagnostic entities. The five-byte telemetry prefix also provides disabled-by-default
-diagnostics for transmit power level, radio fallback, and downlink signal strength.
-Entities become unavailable while the gateway is disconnected or after 2 hours 15
-minutes without telemetry.
+Node entities become unavailable when the gateway disconnects or a node has not reported for 2 hours 15 minutes. Pending or disabled nodes that were previously active remain registered but unavailable. Deleting a node from the gateway removes its Home Assistant device and entities.
 
-The integration requires node firmware using the five-byte common telemetry prefix;
-the older three-byte telemetry format is not supported.
+For a pulse-counter node, open the integration's **Configure** menu to set units per pulse, unit, and device class. The raw pulse count remains available alongside the optional converted total.
 
-Only active nodes are added to Home Assistant. If an existing node becomes pending
-or disabled, its device and entities are retained but unavailable. Removing a node
-from the gateway registry removes its Home Assistant device and entities; adding the
-same stable device UID again recreates them without duplicates.
+If a connection key expires or is revoked, Home Assistant offers a reauthentication repair. Create a new key on the same gateway and enter it in the repair flow; device and entity identities are preserved.
 
-The gateway device exposes connection state, active-node count, and last restart.
-Last stream message and reconnect count are available as disabled-by-default
-diagnostic entities.
-
-The telemetry WebSocket uses a 30-second client heartbeat. A silent broken
-connection is normally detected after the missed pong timeout, then reconnects
-with bounded exponential backoff from 1 to 60 seconds.
-
-The custom integration targets Home Assistant 2026.8 or newer. Add OSK Sense
-from **Settings → Devices & services**, then enter the gateway host and a bearer
-token with the `telemetry:read` scope.
-
-If the gateway rejects a previously configured token, Home Assistant opens a
-reauthentication repair. Enter a replacement `telemetry:read` token; the integration
-verifies that it belongs to the same gateway, updates the config entry, and reloads
-without changing device or entity identities.
-
-The recommended development environment is the repository dev container. In
-VS Code, run **Dev Containers: Rebuild and Reopen in Container**. Then run the
-complete suite, including the Home Assistant config-flow tests, with:
-
-```bash
-python -m pytest -v
-```
-
-Start a development Home Assistant instance with:
-
-```bash
-bash scripts/develop
-```
-
-Home Assistant will be available at <http://localhost:8123>. Its local runtime
-configuration is stored in the ignored `config` directory.
+For development setup, tests, and protocol updates, see [CONTRIBUTING.md](CONTRIBUTING.md).

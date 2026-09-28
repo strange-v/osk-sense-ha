@@ -33,6 +33,7 @@
   node renaming.
 - Real-hardware validation of binary-state and pulse-counter profiles.
 - Home Assistant dev container and automated tests.
+- User installation guide and HACS metadata targeting Home Assistant 2026.3.0.
 
 ## Configuration and discovery
 
@@ -43,4 +44,4 @@
 
 - Exercise registry changes and long-offline behavior on real hardware.
 - Exercise a gateway with multiple nodes on real hardware.
-- Complete user documentation, HACS metadata, CI, and release packaging.
+- Add CI and release packaging.
