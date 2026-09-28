@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/strange-v/osk-sense-ha/issues",
   "requirements": [],
   "zeroconf": ["_osk-sense._tcp.local."],
-  "version": "0.1.0"
+  "version": "1.0.0"
 }

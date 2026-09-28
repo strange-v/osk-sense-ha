@@ -36,9 +36,9 @@
 - User installation guide and HACS metadata targeting Home Assistant 2026.3.0.
 - mDNS discovery and gateway address updates by stable gateway ID without
   duplicate config entries.
+- HACS and Hassfest metadata validation workflow and documented release process.
 
 ## Release readiness
 
 - Exercise registry changes and long-offline behavior on real hardware.
 - Exercise a gateway with multiple nodes on real hardware.
-- Add CI and release packaging.

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import json
 import struct
+import tomllib
 import unittest
 from pathlib import Path
+
+from custom_components.osk_sense.api import CLIENT_NAME
 
 INTEGRATION = Path(__file__).parents[1] / "custom_components" / "osk_sense"
 
@@ -31,6 +34,13 @@ class IntegrationMetadataTest(unittest.TestCase):
         self.assertEqual("local_push", manifest["iot_class"])
         self.assertIs(manifest["config_flow"], True)
         self.assertEqual(["_osk-sense._tcp.local."], manifest["zeroconf"])
+
+    def test_project_and_integration_versions_match(self) -> None:
+        manifest = _load_json(INTEGRATION / "manifest.json")
+        with (INTEGRATION.parents[1] / "pyproject.toml").open("rb") as file:
+            project = tomllib.load(file)
+        self.assertEqual(project["project"]["version"], manifest["version"])
+        self.assertEqual(f"home-assistant/{manifest['version']}", CLIENT_NAME)
 
     def test_translations_have_the_same_shape(self) -> None:
         translations = INTEGRATION / "translations"
