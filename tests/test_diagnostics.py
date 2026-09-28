@@ -49,7 +49,6 @@ async def test_config_entry_diagnostics_are_useful_and_redacted(hass) -> None:
         2,
         2,
         False,
-        False,
         -70,
     )
     info = GatewayInfo(

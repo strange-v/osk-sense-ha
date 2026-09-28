@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import struct
+import time
 import unittest
 from collections.abc import Awaitable, Callable
 
@@ -88,11 +89,16 @@ def _snapshot_control(kind: int, generation: int = 42) -> bytes:
     return _prefix(kind, 10) + struct.pack("<I", generation)
 
 
-def _telemetry(*, profile_id: int = 2, sequence: int = 11) -> bytes:
+def _telemetry(
+    *,
+    profile_id: int = 2,
+    sequence: int = 11,
+    received_at_unix_ms: int = 1_770_000_000_123,
+) -> bytes:
     payload = bytes.fromhex("4002BAE40C2E09")
     return (
         _prefix(3, sequence)
-        + struct.pack("<BHQhB", 7, profile_id, 1_770_000_000_123, -71, len(payload))
+        + struct.pack("<BHQhB", 7, profile_id, received_at_unix_ms, -71, len(payload))
         + payload
     )
 
@@ -197,6 +203,7 @@ class StreamClientTest(unittest.IsolatedAsyncioTestCase):
         first = stream.snapshot.telemetry[0]
         self.assertEqual(23.5, first.telemetry.values["temperature"])
         self.assertEqual(-71, first.rssi)
+        self.assertEqual(1_770_000_000_123, first.received_at_unix_ms)
 
         registry_event = await stream.async_receive()
         self.assertIsInstance(registry_event, RegistryUpdatedEvent)
@@ -208,6 +215,29 @@ class StreamClientTest(unittest.IsolatedAsyncioTestCase):
         assert isinstance(live_event, TelemetryEvent)
         self.assertEqual(13, live_event.sequence)
         self.assertEqual("Main bedroom", live_event.node.display_name)
+
+    async def test_zero_timestamp_uses_local_receipt_time(self) -> None:
+        async def scenario(websocket: web.WebSocketResponse) -> None:
+            await websocket.send_bytes(_hello())
+            await websocket.send_bytes(_snapshot_control(2))
+            await websocket.send_bytes(_telemetry(received_at_unix_ms=0))
+            await websocket.send_bytes(_snapshot_control(4))
+            await websocket.send_bytes(_telemetry(sequence=12, received_at_unix_ms=0))
+
+        self.scenario = scenario
+        before = time.time_ns() // 1_000_000
+        stream = await self.client.async_open_stream(_bootstrap())
+        self.addAsyncCleanup(stream.async_close)
+        snapshot_event = stream.snapshot.telemetry[0]
+        live_event = await stream.async_receive()
+        after = time.time_ns() // 1_000_000
+
+        self.assertIsInstance(live_event, TelemetryEvent)
+        assert isinstance(live_event, TelemetryEvent)
+        self.assertLessEqual(before, snapshot_event.received_at_unix_ms)
+        self.assertLessEqual(snapshot_event.received_at_unix_ms, after)
+        self.assertLessEqual(before, live_event.received_at_unix_ms)
+        self.assertLessEqual(live_event.received_at_unix_ms, after)
 
     async def test_hello_generation_is_reconciled_before_snapshot(self) -> None:
         self.registry = NodeRegistry(42, (_node(),))

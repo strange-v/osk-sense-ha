@@ -58,7 +58,6 @@ def _runtime(
         2,
         2,
         False,
-        False,
         -70,
     )
     info = GatewayInfo(

@@ -69,7 +69,6 @@ PULSE_NODE = NodeInfo(
     2,
     2,
     False,
-    False,
     -71,
 )
 PULSE_BOOTSTRAP = GatewayBootstrap(BOOTSTRAP.info, NodeRegistry(2, (PULSE_NODE,)))

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, cast
 
@@ -234,10 +235,13 @@ class GatewayStream:
             telemetry = self._manifest.decode_telemetry(profile_id, payload)
         except (DecodeError, UnknownProfileError) as error:
             raise InvalidStreamError(str(error)) from error
+        received_at_unix_ms = _integer_field(message, "received_at_unix_ms")
+        if received_at_unix_ms == 0:
+            received_at_unix_ms = time.time_ns() // 1_000_000
         return TelemetryEvent(
             sequence=_integer_field(message, "sequence"),
             node=node,
-            received_at_unix_ms=_integer_field(message, "received_at_unix_ms"),
+            received_at_unix_ms=received_at_unix_ms,
             rssi=_integer_field(message, "rssi"),
             telemetry=telemetry,
         )

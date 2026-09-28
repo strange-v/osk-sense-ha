@@ -42,7 +42,6 @@ def _node(uid: str = "102132435465768798A9", *, profile_id: int = 2) -> NodeInfo
         None,
         None,
         None,
-        None,
     )
 
 
