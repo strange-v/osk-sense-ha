@@ -13,6 +13,14 @@
           "token": "Bearer-токен із дозволом telemetry:read."
         }
       },
+      "zeroconf_confirm": {
+        "title": "Підключення до знайденого OSK Sense Hub",
+        "description": "Введіть токен API лише для читання для знайденого шлюзу.",
+        "data": { "token": "Токен API" },
+        "data_description": {
+          "token": "Bearer-токен із дозволом telemetry:read."
+        }
+      },
       "reauth_confirm": {
         "title": "Оновлення автентифікації OSK Sense",
         "description": "Створіть новий токен API лише для читання у вебінтерфейсі шлюзу.",
@@ -29,11 +37,14 @@
       "invalid_auth": "Токен API недійсний.",
       "invalid_host": "Введіть коректну HTTP-адресу шлюзу без шляху.",
       "invalid_response": "Шлюз повернув некоректну відповідь.",
+      "wrong_gateway": "Адреса тепер вказує на інший шлюз.",
       "unknown": "Сталася неочікувана помилка.",
       "unsupported_version": "Ця версія API або потоку шлюзу не підтримується."
     },
     "abort": {
       "already_configured": "Цей шлюз уже налаштовано.",
+      "invalid_discovery": "Не вдалося перевірити знайдений шлюз.",
+      "unsupported_version": "Ця версія API або потоку шлюзу не підтримується.",
       "reauth_successful": "Автентифікацію успішно оновлено.",
       "wrong_gateway": "Новий токен належить іншому шлюзу."
     }

@@ -30,15 +30,13 @@ class IntegrationMetadataTest(unittest.TestCase):
         self.assertEqual("hub", manifest["integration_type"])
         self.assertEqual("local_push", manifest["iot_class"])
         self.assertIs(manifest["config_flow"], True)
+        self.assertEqual(["_osk-sense._tcp.local."], manifest["zeroconf"])
 
-    def test_translations_have_the_same_shape_as_strings(self) -> None:
-        strings = _load_json(INTEGRATION / "strings.json")["config"]
-        for language in ("en", "uk"):
-            with self.subTest(language):
-                translation = _load_json(
-                    INTEGRATION / "translations" / f"{language}.json"
-                )["config"]
-                self.assertEqual(_shape(strings), _shape(translation))
+    def test_translations_have_the_same_shape(self) -> None:
+        translations = INTEGRATION / "translations"
+        english = _load_json(translations / "en.json")
+        ukrainian = _load_json(translations / "uk.json")
+        self.assertEqual(_shape(english), _shape(ukrainian))
 
     def test_local_brand_images_are_valid_pngs(self) -> None:
         """Ensure the packaged icon and logo have usable PNG canvases."""

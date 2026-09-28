@@ -56,6 +56,10 @@ class InvalidResponseError(GatewayApiError):
     """The gateway response does not match the external API contract."""
 
 
+class GatewayIdentityError(InvalidResponseError):
+    """The address now points to a different gateway."""
+
+
 class ApiResponseError(GatewayApiError):
     """The gateway returned a non-success HTTP response."""
 
@@ -170,12 +174,14 @@ class GatewayApiClient:
     def __init__(
         self,
         host: str,
-        token: str,
+        token: str | None,
         session: ClientSession,
         *,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> None:
-        if not token or any(not 0x21 <= ord(char) <= 0x7E for char in token):
+        if token is not None and (
+            not token or any(not 0x21 <= ord(char) <= 0x7E for char in token)
+        ):
             raise ValueError("token must be non-empty and contain no whitespace")
         if timeout <= 0:
             raise ValueError("timeout must be positive")
@@ -200,7 +206,9 @@ class GatewayApiClient:
         document = await self._async_get_json("/api/nodes", authenticated=True)
         return _parse_node_registry(document)
 
-    async def async_bootstrap(self) -> GatewayBootstrap:
+    async def async_bootstrap(
+        self, *, expected_gateway_id: str | None = None
+    ) -> GatewayBootstrap:
         """Validate compatibility and read the state needed by the stream."""
         info = await self.async_get_info()
         if (
@@ -208,6 +216,8 @@ class GatewayApiClient:
             or info.stream_version not in SUPPORTED_STREAM_VERSIONS
         ):
             raise UnsupportedVersionError(info.api_version, info.stream_version)
+        if expected_gateway_id is not None and info.gateway_id != expected_gateway_id:
+            raise GatewayIdentityError("gateway identity changed")
         return GatewayBootstrap(info, await self.async_get_nodes())
 
     async def async_open_stream(
@@ -230,6 +240,8 @@ class GatewayApiClient:
 
     async def _async_connect_websocket(self) -> ClientWebSocketResponse:
         """Open the authenticated gateway WebSocket transport."""
+        if self._token is None:
+            raise ValueError("an API token is required for the telemetry stream")
         try:
             async with asyncio.timeout(self._timeout_seconds):
                 return await self._session.ws_connect(
@@ -253,6 +265,8 @@ class GatewayApiClient:
     async def _async_get_json(self, path: str, *, authenticated: bool) -> JsonObject:
         headers = {"Accept": "application/json"}
         if authenticated:
+            if self._token is None:
+                raise ValueError("an API token is required for this endpoint")
             headers["Authorization"] = f"Bearer {self._token}"
         try:
             async with self._session.get(

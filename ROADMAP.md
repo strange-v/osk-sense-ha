@@ -34,11 +34,8 @@
 - Real-hardware validation of binary-state and pulse-counter profiles.
 - Home Assistant dev container and automated tests.
 - User installation guide and HACS metadata targeting Home Assistant 2026.3.0.
-
-## Configuration and discovery
-
-- Add mDNS discovery and update a gateway's address by its stable gateway ID
-  without creating a duplicate config entry.
+- mDNS discovery and gateway address updates by stable gateway ID without
+  duplicate config entries.
 
 ## Release readiness
 

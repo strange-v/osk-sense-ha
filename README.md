@@ -9,9 +9,9 @@ Requires Home Assistant **2026.3.0 or newer** and an OSK Sense gateway.
 1. In HACS, open **Custom repositories**, add `https://github.com/strange-v/osk-sense-ha`, and choose **Integration**.
 2. Find **OSK Sense** in HACS and download it. Restart Home Assistant.
 3. In the gateway web UI, open **Connect Home Assistant** and create a connection key. Copy it when shown; the key needs `telemetry:read` access.
-4. In Home Assistant, open **Settings → Devices & services → Add integration**, select **OSK Sense**, and enter the gateway host (for example, `osk-hub-<MAC>.local` or its IP address) and the connection key.
+4. In Home Assistant, open **Settings → Devices & services**. If the gateway appears as a discovered device, select it and enter the connection key. Otherwise, choose **Add integration → OSK Sense** and enter the gateway host (for example, `osk-hub-<MAC>.local` or its IP address) and the connection key.
 
-The gateway and Home Assistant must be able to reach each other on the local network. The gateway API uses HTTP, so keep that network trusted. If HACS is unavailable, copy `custom_components/osk_sense` into your Home Assistant `config/custom_components/` directory, restart, and continue at step 3.
+The gateway and Home Assistant must be able to reach each other on the local network. Automatic discovery requires mDNS to be enabled on the gateway and multicast traffic to reach Home Assistant. If the gateway's IP address changes, a verified mDNS announcement updates the existing integration entry and reconnects it; devices, entities, and options keep their identities. The gateway API uses HTTP, so keep that network trusted. If HACS is unavailable, copy `custom_components/osk_sense` into your Home Assistant `config/custom_components/` directory, restart, and continue at step 3.
 
 ## What appears in Home Assistant
 

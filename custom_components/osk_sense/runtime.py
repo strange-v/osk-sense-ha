@@ -84,8 +84,30 @@ class GatewayRuntime:
     async def async_run(self) -> None:
         """Connect forever, backing off after any failed stream session."""
         delay = 1.0
-        current_bootstrap = self.bootstrap
+        current_bootstrap: GatewayBootstrap | None = self.bootstrap
         while not self._stopping:
+            if current_bootstrap is None:
+                try:
+                    current_bootstrap = await self.client.async_bootstrap(
+                        expected_gateway_id=self.bootstrap.info.gateway_id
+                    )
+                    if (
+                        current_bootstrap.info.gateway_id
+                        != self.bootstrap.info.gateway_id
+                    ):
+                        raise ValueError("gateway identity changed")
+                except asyncio.CancelledError:
+                    raise
+                except AuthenticationError:
+                    _LOGGER.warning("OSK Sense API token is no longer valid")
+                    self._authentication_failed()
+                    return
+                except Exception as error:
+                    _LOGGER.warning("OSK Sense re-bootstrap failed: %s", error)
+                    await self._sleep(delay)
+                    delay = min(delay * 2, _MAX_RECONNECT_DELAY)
+                    continue
+
             try:
                 stream = await self.client.async_open_stream(
                     current_bootstrap, manifest=self.manifest
@@ -125,16 +147,7 @@ class GatewayRuntime:
                 break
             await self._sleep(delay)
             delay = min(delay * 2, _MAX_RECONNECT_DELAY)
-            try:
-                current_bootstrap = await self.client.async_bootstrap()
-            except asyncio.CancelledError:
-                raise
-            except AuthenticationError:
-                _LOGGER.warning("OSK Sense API token is no longer valid")
-                self._authentication_failed()
-                return
-            except Exception as error:
-                _LOGGER.warning("OSK Sense re-bootstrap failed: %s", error)
+            current_bootstrap = None
 
     async def async_stop(self) -> None:
         """Request shutdown and close a receive-blocked stream."""

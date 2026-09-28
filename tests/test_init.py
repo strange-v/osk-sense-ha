@@ -16,6 +16,7 @@ try:
         STATE_UNAVAILABLE,
     )
     from homeassistant.core import CoreState
+    from homeassistant.exceptions import ConfigEntryError
     from homeassistant.helpers import device_registry as dr
     from homeassistant.helpers import entity_registry as er
 except ModuleNotFoundError as error:
@@ -24,6 +25,7 @@ except ModuleNotFoundError as error:
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.osk_sense import async_setup_entry
 from custom_components.osk_sense.api import (
     GatewayBootstrap,
     GatewayInfo,
@@ -74,6 +76,23 @@ BOOTSTRAP = GatewayBootstrap(
     ),
     registry=NodeRegistry(1, (NODE,)),
 )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_setup_rejects_address_of_another_gateway(hass) -> None:
+    """A reused IP address must not attach another gateway to this entry."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="f" * 32,
+        data={CONF_HOST: "http://192.0.2.15", CONF_TOKEN: "secret"},
+    )
+    with patch("custom_components.osk_sense.GatewayApiClient") as client_class:
+        client_class.return_value.async_bootstrap = AsyncMock(return_value=BOOTSTRAP)
+        with pytest.raises(ConfigEntryError, match="Invalid or unsupported"):
+            await async_setup_entry(hass, entry)
+        client_class.return_value.async_bootstrap.assert_awaited_once_with(
+            expected_gateway_id=entry.unique_id
+        )
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

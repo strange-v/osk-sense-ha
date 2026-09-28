@@ -46,7 +46,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntegrationConfigEntry) 
         async_get_clientsession(hass),
     )
     try:
-        bootstrap = await client.async_bootstrap()
+        bootstrap = await client.async_bootstrap(expected_gateway_id=entry.unique_id)
+        if entry.unique_id is not None and bootstrap.info.gateway_id != entry.unique_id:
+            raise InvalidResponseError("gateway identity changed")
     except AuthenticationError as error:
         raise ConfigEntryAuthFailed("Invalid OSK Sense API token") from error
     except CannotConnectError as error:

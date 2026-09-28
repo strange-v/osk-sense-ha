@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import unittest
 from dataclasses import replace
+from ipaddress import ip_address
 from unittest.mock import AsyncMock, patch
 
 try:
-    from homeassistant.config_entries import SOURCE_REAUTH, SOURCE_USER
+    from homeassistant.config_entries import (
+        SOURCE_IGNORE,
+        SOURCE_REAUTH,
+        SOURCE_USER,
+        SOURCE_ZEROCONF,
+        ConfigEntryState,
+    )
     from homeassistant.const import CONF_HOST
     from homeassistant.data_entry_flow import FlowResultType
+    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 except ModuleNotFoundError as error:
     raise unittest.SkipTest("requires a Home Assistant test environment") from error
 
@@ -72,6 +80,188 @@ PULSE_NODE = NodeInfo(
     -71,
 )
 PULSE_BOOTSTRAP = GatewayBootstrap(BOOTSTRAP.info, NodeRegistry(2, (PULSE_NODE,)))
+
+
+def _discovery(
+    gateway_id: str = BOOTSTRAP.info.gateway_id, *, address: str = "192.0.2.15"
+) -> ZeroconfServiceInfo:
+    ip = ip_address(address)
+    return ZeroconfServiceInfo(
+        ip_address=ip,
+        ip_addresses=[ip],
+        port=80,
+        hostname="osk-hub-test.local.",
+        type="_osk-sense._tcp.local.",
+        name="osk-hub-test._osk-sense._tcp.local.",
+        properties={"gateway_id": gateway_id},
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_updates_existing_address_and_preserves_entry(hass) -> None:
+    """A moved gateway keeps its entry and credentials."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=BOOTSTRAP.info.gateway_id,
+        data={CONF_HOST: "http://192.0.2.10", CONF_TOKEN: "old-token"},
+        options={"pulse_counters": {"node": {"units_per_pulse": 2}}},
+        state=ConfigEntryState.LOADED,
+    )
+    entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.osk_sense.config_flow.GatewayApiClient"
+        ) as client_class,
+        patch.object(hass.config_entries, "async_schedule_reload") as reload_entry,
+    ):
+        client = client_class.return_value
+        client.base_url = "http://192.0.2.15"
+        client.async_get_info = AsyncMock(return_value=BOOTSTRAP.info)
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_ZEROCONF},
+            data=_discovery(),
+        )
+
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "already_configured"
+    assert entry.data == {CONF_HOST: "http://192.0.2.15", CONF_TOKEN: "old-token"}
+    assert entry.options == {"pulse_counters": {"node": {"units_per_pulse": 2}}}
+    assert entry.unique_id == BOOTSTRAP.info.gateway_id
+    client_class.assert_called_once()
+    assert client_class.call_args.args[:2] == ("http://192.0.2.15", None)
+    client.async_get_info.assert_awaited_once()
+    reload_entry.assert_called_once_with(entry.entry_id)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_keeps_address_when_unchanged(hass) -> None:
+    """Repeated advertisements do not schedule another connection."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=BOOTSTRAP.info.gateway_id,
+        data={CONF_HOST: "http://192.0.2.15", CONF_TOKEN: "secret"},
+        state=ConfigEntryState.LOADED,
+    )
+    entry.add_to_hass(hass)
+    with (
+        patch(
+            "custom_components.osk_sense.config_flow.GatewayApiClient"
+        ) as client_class,
+        patch.object(hass.config_entries, "async_schedule_reload") as reload_entry,
+    ):
+        client_class.return_value.base_url = "http://192.0.2.15"
+        client_class.return_value.async_get_info = AsyncMock(
+            return_value=BOOTSTRAP.info
+        )
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_ZEROCONF}, data=_discovery()
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert entry.data[CONF_HOST] == "http://192.0.2.15"
+    reload_entry.assert_not_called()
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_rejects_wrong_identity(hass) -> None:
+    """A TXT record that disagrees with the API cannot change an entry."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=BOOTSTRAP.info.gateway_id,
+        data={CONF_HOST: "http://192.0.2.10", CONF_TOKEN: "secret"},
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
+    ) as client_class:
+        client_class.return_value.async_get_info = AsyncMock(
+            return_value=BOOTSTRAP.info
+        )
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_ZEROCONF},
+            data=_discovery("f" * 32),
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "invalid_discovery"
+    assert entry.data[CONF_HOST] == "http://192.0.2.10"
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_does_not_change_ignored_entry(hass) -> None:
+    """An ignored gateway stays ignored without stored connection details."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        source=SOURCE_IGNORE,
+        unique_id=BOOTSTRAP.info.gateway_id,
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
+    ) as client_class:
+        client_class.return_value.async_get_info = AsyncMock(
+            return_value=BOOTSTRAP.info
+        )
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_ZEROCONF}, data=_discovery()
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert entry.data == {}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_collects_token_for_new_gateway(hass) -> None:
+    """A new gateway needs a token before its config entry is created."""
+    with (
+        patch(
+            "custom_components.osk_sense.config_flow.GatewayApiClient"
+        ) as client_class,
+        patch.object(hass.config_entries, "async_setup", AsyncMock(return_value=True)),
+    ):
+        client = client_class.return_value
+        client.base_url = "http://192.0.2.15"
+        client.async_get_info = AsyncMock(return_value=BOOTSTRAP.info)
+        client.async_bootstrap = AsyncMock(return_value=BOOTSTRAP)
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_ZEROCONF}, data=_discovery()
+        )
+        assert result["type"] is FlowResultType.FORM
+        assert result["step_id"] == "zeroconf_confirm"
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TOKEN: "secret"}
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["result"].unique_id == BOOTSTRAP.info.gateway_id
+    assert result["data"] == {CONF_HOST: "http://192.0.2.15", CONF_TOKEN: "secret"}
+    client.async_bootstrap.assert_awaited_once_with(
+        expected_gateway_id=BOOTSTRAP.info.gateway_id
+    )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_rechecks_identity_before_creating_entry(hass) -> None:
+    """An address reused while the token form is open cannot create an entry."""
+    with patch(
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
+    ) as client_class:
+        client = client_class.return_value
+        client.base_url = "http://192.0.2.15"
+        client.async_get_info = AsyncMock(return_value=BOOTSTRAP.info)
+        client.async_bootstrap = AsyncMock(
+            return_value=replace(
+                BOOTSTRAP, info=replace(BOOTSTRAP.info, gateway_id="f" * 32)
+            )
+        )
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_ZEROCONF}, data=_discovery()
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TOKEN: "secret"}
+        )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "wrong_gateway"}
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

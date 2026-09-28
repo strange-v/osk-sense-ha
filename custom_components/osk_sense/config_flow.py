@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Mapping
 from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import (
+    SOURCE_IGNORE,
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
@@ -24,12 +26,17 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
 )
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+from yarl import URL
 
 from .api import (
+    SUPPORTED_API_VERSIONS,
+    SUPPORTED_STREAM_VERSIONS,
     ApiResponseError,
     AuthenticationError,
     CannotConnectError,
     GatewayApiClient,
+    GatewayIdentityError,
     InvalidResponseError,
     UnsupportedVersionError,
 )
@@ -50,6 +57,8 @@ _USER_SCHEMA = vol.Schema(
         vol.Required(CONF_TOKEN): str,
     }
 )
+_TOKEN_SCHEMA = vol.Schema({vol.Required(CONF_TOKEN): str})
+_GATEWAY_ID = re.compile(r"[0-9a-f]{32}\Z")
 
 _ENERGY_UNITS = tuple(unit.value for unit in UnitOfEnergy)
 _VOLUME_UNITS = tuple(unit.value for unit in UnitOfVolume)
@@ -61,6 +70,10 @@ class OskSenseConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        self._discovered_host: str | None = None
+        self._discovered_gateway_id: str | None = None
+
     @staticmethod
     @callback
     def async_get_options_flow(
@@ -68,6 +81,99 @@ class OskSenseConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> OskSenseOptionsFlow:
         """Return the pulse-counter options flow."""
         return OskSenseOptionsFlow()
+
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> ConfigFlowResult:
+        """Verify a discovered gateway and update an existing entry's address."""
+        advertised_id = discovery_info.properties.get("gateway_id")
+        if (
+            not isinstance(advertised_id, str)
+            or _GATEWAY_ID.fullmatch(advertised_id) is None
+            or discovery_info.port is None
+            or not 1 <= discovery_info.port <= 65535
+        ):
+            return self.async_abort(reason="invalid_discovery")
+
+        host = str(
+            URL.build(
+                scheme="http",
+                host=discovery_info.host,
+                port=discovery_info.port,
+            )
+        ).rstrip("/")
+        try:
+            client = GatewayApiClient(host, None, async_get_clientsession(self.hass))
+            info = await client.async_get_info()
+        except ValueError, CannotConnectError, ApiResponseError, InvalidResponseError:
+            return self.async_abort(reason="invalid_discovery")
+        if info.gateway_id != advertised_id:
+            return self.async_abort(reason="invalid_discovery")
+        if (
+            info.api_version not in SUPPORTED_API_VERSIONS
+            or info.stream_version not in SUPPORTED_STREAM_VERSIONS
+        ):
+            return self.async_abort(reason="unsupported_version")
+
+        existing_entry = await self.async_set_unique_id(info.gateway_id)
+        if existing_entry is not None and existing_entry.source == SOURCE_IGNORE:
+            return self.async_abort(reason="already_configured")
+        self._abort_if_unique_id_configured(updates={CONF_HOST: client.base_url})
+        self._discovered_host = client.base_url
+        self._discovered_gateway_id = info.gateway_id
+        self.context["title_placeholders"] = {"name": info.hostname}
+        return await self.async_step_zeroconf_confirm()
+
+    async def async_step_zeroconf_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Collect a token for a verified, newly discovered gateway."""
+        if self._discovered_host is None or self._discovered_gateway_id is None:
+            return self.async_abort(reason="invalid_discovery")
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                client = GatewayApiClient(
+                    self._discovered_host,
+                    user_input[CONF_TOKEN],
+                    async_get_clientsession(self.hass),
+                )
+                bootstrap = await client.async_bootstrap(
+                    expected_gateway_id=self._discovered_gateway_id
+                )
+            except ValueError, AuthenticationError:
+                errors["base"] = "invalid_auth"
+            except CannotConnectError:
+                errors["base"] = "cannot_connect"
+            except UnsupportedVersionError:
+                errors["base"] = "unsupported_version"
+            except GatewayIdentityError:
+                errors["base"] = "wrong_gateway"
+            except ApiResponseError, InvalidResponseError:
+                errors["base"] = "invalid_response"
+            except Exception:
+                _LOGGER.exception(
+                    "Unexpected error configuring discovered OSK Sense Hub"
+                )
+                errors["base"] = "unknown"
+            else:
+                if bootstrap.info.gateway_id != self._discovered_gateway_id:
+                    errors["base"] = "wrong_gateway"
+                else:
+                    self._abort_if_unique_id_configured()
+                    return self.async_create_entry(
+                        title=bootstrap.info.hostname,
+                        data={
+                            CONF_HOST: client.base_url,
+                            CONF_TOKEN: user_input[CONF_TOKEN],
+                        },
+                    )
+
+        return self.async_show_form(
+            step_id="zeroconf_confirm",
+            data_schema=_TOKEN_SCHEMA,
+            errors=errors,
+        )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

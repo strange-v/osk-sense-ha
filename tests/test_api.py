@@ -17,6 +17,7 @@ from custom_components.osk_sense.api import (
     CannotConnectError,
     GatewayApiClient,
     GatewayBootstrap,
+    GatewayIdentityError,
     InvalidResponseError,
     UnsupportedVersionError,
     normalize_base_url,
@@ -142,6 +143,21 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(1, result.registry.nodes[1].fixed_power_level)
         self.assertIsNone(self.seen_info_authorization)
         self.assertEqual("Bearer test-token", self.seen_nodes_authorization)
+
+    async def test_bootstrap_rejects_different_gateway_before_authentication(
+        self,
+    ) -> None:
+        with self.assertRaises(GatewayIdentityError):
+            await self.client.async_bootstrap(expected_gateway_id="f" * 32)
+        self.assertIsNone(self.seen_nodes_authorization)
+
+    async def test_info_can_be_read_without_token(self) -> None:
+        client = GatewayApiClient(self.client.base_url, None, self.session)
+        info = await client.async_get_info()
+        self.assertEqual(INFO["gateway_id"], info.gateway_id)
+        self.assertIsNone(self.seen_info_authorization)
+        with self.assertRaises(ValueError):
+            await client.async_get_nodes()
 
     async def test_authentication_error(self) -> None:
         self.nodes_status = 401

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import unittest
+from dataclasses import replace
 from unittest.mock import AsyncMock, Mock, patch
 
 from custom_components.osk_sense.api import (
@@ -140,8 +141,36 @@ class GatewayRuntimeTest(unittest.IsolatedAsyncioTestCase):
 
         authentication_failed.assert_called_once_with()
         sleep.assert_awaited_once_with(1.0)
-        client.async_bootstrap.assert_awaited_once_with()
+        client.async_bootstrap.assert_awaited_once_with(expected_gateway_id="0" * 32)
         self.assertFalse(runtime.connected)
+        self.assertTrue(stream.closed)
+
+    async def test_identity_change_never_reopens_authenticated_stream(self) -> None:
+        """A reused address cannot receive the old gateway's bearer token."""
+        stream = _Stream(
+            StreamSnapshot(NodeRegistry(42, (_node(),)), ()),
+            [StreamDisconnectedError("closed")],
+        )
+        client = AsyncMock()
+        client.async_open_stream.return_value = stream
+        other_bootstrap = replace(
+            _bootstrap(), info=replace(_bootstrap().info, gateway_id="f" * 32)
+        )
+        client.async_bootstrap.return_value = other_bootstrap
+        sleeps: list[float] = []
+
+        async def sleep(delay: float) -> None:
+            sleeps.append(delay)
+            if len(sleeps) == 2:
+                raise asyncio.CancelledError
+
+        runtime = GatewayRuntime(client, _bootstrap(), sleep=sleep)
+        with self.assertRaises(asyncio.CancelledError):
+            await runtime.async_run()
+
+        client.async_open_stream.assert_awaited_once()
+        client.async_bootstrap.assert_awaited_once_with(expected_gateway_id="0" * 32)
+        self.assertEqual([1.0, 2.0], sleeps)
         self.assertTrue(stream.closed)
 
     def test_gateway_uptime_advances_from_rest_snapshot(self) -> None:
