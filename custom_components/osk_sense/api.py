@@ -122,7 +122,6 @@ class NodeInfo:
     tx_power_target: int | None
     tx_power_level: int | None
     radio_fallback: bool | None
-    supply_limited: bool | None
     downlink_rssi: int | None
 
 
@@ -378,7 +377,6 @@ def _parse_node(document: JsonObject) -> NodeInfo:
     rssi_value: object = document.get("rssi")
     tx_power_level_value: object = document.get("tx_power_level")
     radio_fallback_value: object = document.get("radio_fallback")
-    supply_limited_value: object = document.get("supply_limited")
     downlink_rssi_value: object = document.get("downlink_rssi")
     if has_telemetry:
         if not _is_uint(last_seen_value, 0xFFFFFFFFFFFFFFFF):
@@ -392,8 +390,6 @@ def _parse_node(document: JsonObject) -> NodeInfo:
             raise InvalidResponseError("tx_power_level must not exceed the ceiling")
         if not isinstance(radio_fallback_value, bool):
             raise InvalidResponseError("radio_fallback must be a boolean")
-        if not isinstance(supply_limited_value, bool):
-            raise InvalidResponseError("supply_limited must be a boolean")
         if "downlink_rssi" in document:
             if not _is_int(downlink_rssi_value) or not (
                 -0x7F <= downlink_rssi_value <= 0x7F
@@ -408,7 +404,6 @@ def _parse_node(document: JsonObject) -> NodeInfo:
         rssi: int | None = rssi_value
         tx_power_level: int | None = tx_power_level_value
         radio_fallback: bool | None = radio_fallback_value
-        supply_limited: bool | None = supply_limited_value
     elif any(
         key in document
         for key in (
@@ -416,7 +411,6 @@ def _parse_node(document: JsonObject) -> NodeInfo:
             "rssi",
             "tx_power_level",
             "radio_fallback",
-            "supply_limited",
             "downlink_rssi",
         )
     ):
@@ -428,7 +422,6 @@ def _parse_node(document: JsonObject) -> NodeInfo:
         rssi = None
         tx_power_level = None
         radio_fallback = None
-        supply_limited = None
         downlink_rssi = None
 
     return NodeInfo(
@@ -447,7 +440,6 @@ def _parse_node(document: JsonObject) -> NodeInfo:
         tx_power_target=tx_power_target,
         tx_power_level=tx_power_level,
         radio_fallback=radio_fallback,
-        supply_limited=supply_limited,
         downlink_rssi=downlink_rssi,
     )
 

@@ -52,8 +52,8 @@ NODES = {
             "rssi": -74,
             "tx_power_level": 2,
             "radio_fallback": False,
-            "supply_limited": False,
             "downlink_rssi": -71,
+            "supply_mv": 2987,
         },
         {
             "node_id": 8,

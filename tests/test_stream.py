@@ -61,7 +61,6 @@ def _node(*, profile_id: int = 2, display_name: str = "Bedroom") -> NodeInfo:
         tx_power_target=2,
         tx_power_level=2,
         radio_fallback=False,
-        supply_limited=False,
         downlink_rssi=-71,
     )
 
@@ -153,8 +152,8 @@ class StreamClientTest(unittest.IsolatedAsyncioTestCase):
                         "rssi": node.rssi,
                         "tx_power_level": node.tx_power_level,
                         "radio_fallback": node.radio_fallback,
-                        "supply_limited": node.supply_limited,
                         "downlink_rssi": node.downlink_rssi,
+                        "supply_mv": 3300,
                     }
                     for node in self.registry.nodes
                 ],

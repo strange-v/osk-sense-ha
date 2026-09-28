@@ -3,7 +3,7 @@ Local Home Assistant integration for OSK Sense Hub. Reads the node registry over
 
 ## Development
 
-The canonical wire-format files live in the sibling `RadioSensors` repository. Vendor them after every protocol change:
+The canonical wire-format files live in the sibling `osk-sense` repository. Vendor them after every protocol change:
 
 ```powershell
 python scripts/sync_protocol_artifacts.py

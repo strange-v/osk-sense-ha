@@ -57,7 +57,6 @@ NODE = NodeInfo(
     tx_power_target=None,
     tx_power_level=None,
     radio_fallback=None,
-    supply_limited=None,
     downlink_rssi=None,
 )
 

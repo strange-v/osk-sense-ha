@@ -1,4 +1,4 @@
-"""Vendor canonical protocol artifacts from the RadioSensors repository."""
+"""Vendor canonical protocol artifacts from the osk-sense repository."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument(
         "--source",
         type=Path,
-        default=repository.parent / "osk-sense" / "v2" / "protocol",
+        default=repository.parent / "osk-sense" / "protocol",
     )
     args = parser.parse_args()
     destination = repository / "custom_components" / "osk_sense" / "protocol_data"
