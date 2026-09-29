@@ -29,7 +29,7 @@ MAX_STREAM_MESSAGE_SIZE: Final = 1024
 WEBSOCKET_HEARTBEAT_SECONDS: Final = 30.0
 SUPPORTED_API_VERSIONS: Final = frozenset({1})
 SUPPORTED_STREAM_VERSIONS: Final = frozenset({1})
-CLIENT_NAME: Final = "home-assistant/1.0.1"
+CLIENT_NAME: Final = "home-assistant/1.0.2"
 
 _LOWER_HEX_128 = re.compile(r"^[0-9a-f]{32}$")
 _UPPER_HEX_UID = re.compile(r"^[0-9A-F]{20}$")
