@@ -277,6 +277,10 @@ class GatewayApiClient:
                 body = await response.content.read(MAX_RESPONSE_SIZE + 1)
                 if authenticated and response.status in (401, 403):
                     raise AuthenticationError("invalid bearer token")
+                # A gateway without its storage cannot vouch for its identity.
+                if response.status == 503:
+                    code = _read_error_code(body, response.content_type)
+                    raise CannotConnectError(f"gateway unavailable: {code}")
                 if response.status != 200:
                     raise ApiResponseError(
                         response.status, _read_error_code(body, response.content_type)

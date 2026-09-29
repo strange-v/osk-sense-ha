@@ -177,6 +177,20 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(409, context.exception.status)
         self.assertEqual("registry_busy", context.exception.error_code)
 
+    async def test_gateway_in_recovery_is_temporarily_unreachable(self) -> None:
+        self.info_status = 503
+        self.info = {"error": "storage_unavailable"}
+        with self.assertRaisesRegex(CannotConnectError, "storage_unavailable"):
+            await self.client.async_bootstrap(expected_gateway_id=INFO["gateway_id"])
+        self.assertIsNone(self.seen_nodes_authorization)
+
+        self.info_status = 200
+        self.info = deepcopy(INFO)
+        self.nodes_status = 503
+        self.nodes = {"error": "recovery_required"}
+        with self.assertRaises(CannotConnectError):
+            await self.client.async_get_nodes()
+
     async def test_unsupported_versions_stop_before_authenticated_request(self) -> None:
         self.info["stream_version"] = 2
         with self.assertRaises(UnsupportedVersionError) as context:
