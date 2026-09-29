@@ -108,6 +108,8 @@ def _async_register_devices(hass: HomeAssistant, entry: IntegrationConfigEntry) 
 
     runtime = entry.runtime_data
     info = runtime.bootstrap.info
+    if entry.title != info.hostname:
+        hass.config_entries.async_update_entry(entry, title=info.hostname)
     registry = dr.async_get(hass)
     gateway = registry.async_get_or_create(
         config_entry_id=entry.entry_id,

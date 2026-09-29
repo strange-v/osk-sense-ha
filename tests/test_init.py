@@ -96,6 +96,26 @@ async def test_setup_rejects_address_of_another_gateway(hass) -> None:
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_existing_entry_uses_gateway_name_after_restart(hass) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=BOOTSTRAP.info.gateway_id,
+        title="old-name",
+        data={CONF_HOST: "http://osk-hub.local", CONF_TOKEN: "secret"},
+    )
+    entry.add_to_hass(hass)
+    with (
+        patch("custom_components.osk_sense.GatewayApiClient") as client_class,
+        patch.object(GatewayRuntime, "async_run", AsyncMock()),
+    ):
+        client_class.return_value.base_url = "http://osk-hub.local"
+        client_class.return_value.async_bootstrap = AsyncMock(return_value=BOOTSTRAP)
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        assert entry.title == BOOTSTRAP.info.hostname
+        assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_entry_lifecycle_entities_and_deferred_stream(hass) -> None:
     """Exercise setup, push update, deferred stream start, and unload."""
     hass.set_state(CoreState.starting)

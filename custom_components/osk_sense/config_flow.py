@@ -10,6 +10,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import (
     SOURCE_IGNORE,
+    SOURCE_ZEROCONF,
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
@@ -17,6 +18,7 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_HOST, UnitOfEnergy, UnitOfVolume
 from homeassistant.core import callback
+from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     NumberSelector,  # pyright: ignore[reportUnknownVariableType]
@@ -115,14 +117,30 @@ class OskSenseConfigFlow(ConfigFlow, domain=DOMAIN):
         ):
             return self.async_abort(reason="unsupported_version")
 
-        existing_entry = await self.async_set_unique_id(info.gateway_id)
+        existing_entry = await self.async_set_unique_id(
+            info.gateway_id, raise_on_progress=False
+        )
         if existing_entry is not None and existing_entry.source == SOURCE_IGNORE:
             return self.async_abort(reason="already_configured")
         self._abort_if_unique_id_configured(updates={CONF_HOST: client.base_url})
+        placeholders = {"name": info.hostname, "host": client.base_url}
+        self._replace_stale_discovery(info.gateway_id, placeholders)
         self._discovered_host = client.base_url
         self._discovered_gateway_id = info.gateway_id
-        self.context["title_placeholders"] = {"name": info.hostname}
+        self.context["title_placeholders"] = placeholders
         return await self.async_step_zeroconf_confirm()
+
+    def _replace_stale_discovery(
+        self, gateway_id: str, placeholders: dict[str, str]
+    ) -> None:
+        """Replace a pending discovery whose hostname or address has changed."""
+        for flow in self._async_in_progress(
+            include_uninitialized=True,
+            match_context={"source": SOURCE_ZEROCONF, "unique_id": gateway_id},
+        ):
+            if flow.get("context", {}).get("title_placeholders") == placeholders:
+                raise AbortFlow("already_in_progress")
+            self.hass.config_entries.flow.async_abort(flow["flow_id"])
 
     async def async_step_zeroconf_confirm(
         self, user_input: dict[str, Any] | None = None

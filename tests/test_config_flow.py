@@ -83,16 +83,19 @@ PULSE_BOOTSTRAP = GatewayBootstrap(BOOTSTRAP.info, NodeRegistry(2, (PULSE_NODE,)
 
 
 def _discovery(
-    gateway_id: str = BOOTSTRAP.info.gateway_id, *, address: str = "192.0.2.15"
+    gateway_id: str = BOOTSTRAP.info.gateway_id,
+    *,
+    address: str = "192.0.2.15",
+    hostname: str = "osk-hub-test",
 ) -> ZeroconfServiceInfo:
     ip = ip_address(address)
     return ZeroconfServiceInfo(
         ip_address=ip,
         ip_addresses=[ip],
         port=80,
-        hostname="osk-hub-test.local.",
+        hostname=f"{hostname}.local.",
         type="_osk-sense._tcp.local.",
-        name="osk-hub-test._osk-sense._tcp.local.",
+        name=f"{hostname}._osk-sense._tcp.local.",
         properties={"gateway_id": gateway_id},
     )
 
@@ -238,6 +241,72 @@ async def test_discovery_collects_token_for_new_gateway(hass) -> None:
     client.async_bootstrap.assert_awaited_once_with(
         expected_gateway_id=BOOTSTRAP.info.gateway_id
     )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_replaces_pending_flow_after_hostname_change(hass) -> None:
+    """A renamed gateway replaces its pending card instead of adding another."""
+    renamed = replace(BOOTSTRAP.info, hostname="osk-hub")
+    with (
+        patch(
+            "custom_components.osk_sense.config_flow.GatewayApiClient"
+        ) as client_class,
+        patch.object(hass.config_entries, "async_setup", AsyncMock(return_value=True)),
+    ):
+        client = client_class.return_value
+        client.base_url = "http://192.0.2.15"
+        client.async_get_info = AsyncMock(return_value=BOOTSTRAP.info)
+        first = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_ZEROCONF}, data=_discovery()
+        )
+        assert first["type"] is FlowResultType.FORM
+
+        client.base_url = "http://192.0.2.16"
+        client.async_get_info = AsyncMock(return_value=renamed)
+        second = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_ZEROCONF},
+            data=_discovery(address="192.0.2.16", hostname="osk-hub"),
+        )
+        assert second["type"] is FlowResultType.FORM
+
+        flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        assert [flow["flow_id"] for flow in flows] == [second["flow_id"]]
+        assert flows[0]["context"]["title_placeholders"]["name"] == "osk-hub"
+
+        client.async_bootstrap = AsyncMock(
+            return_value=replace(BOOTSTRAP, info=renamed)
+        )
+        result = await hass.config_entries.flow.async_configure(
+            second["flow_id"], {CONF_TOKEN: "secret"}
+        )
+        await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "osk-hub"
+    assert result["data"] == {CONF_HOST: "http://192.0.2.16", CONF_TOKEN: "secret"}
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_keeps_pending_flow_when_unchanged(hass) -> None:
+    """Repeated announcements do not reset a card the user may be filling in."""
+    with patch(
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
+    ) as client_class:
+        client = client_class.return_value
+        client.base_url = "http://192.0.2.15"
+        client.async_get_info = AsyncMock(return_value=BOOTSTRAP.info)
+        first = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_ZEROCONF}, data=_discovery()
+        )
+        second = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_ZEROCONF}, data=_discovery()
+        )
+
+    assert second["type"] is FlowResultType.ABORT
+    assert second["reason"] == "already_in_progress"
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["flow_id"] for flow in flows] == [first["flow_id"]]
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
