@@ -133,14 +133,26 @@ class OskSenseConfigFlow(ConfigFlow, domain=DOMAIN):
     def _replace_stale_discovery(
         self, gateway_id: str, placeholders: dict[str, str]
     ) -> None:
-        """Replace a pending discovery whose hostname or address has changed."""
+        """Replace pending discoveries for this gateway or its current address.
+
+        A card for the same gateway is stale when its hostname or address has
+        changed. A card for another gateway ID at this address can no longer be
+        completed, because its confirm step verifies the gateway identity.
+        """
+        stale: list[str] = []
         for flow in self._async_in_progress(
-            include_uninitialized=True,
-            match_context={"source": SOURCE_ZEROCONF, "unique_id": gateway_id},
+            include_uninitialized=True, match_context={"source": SOURCE_ZEROCONF}
         ):
-            if flow.get("context", {}).get("title_placeholders") == placeholders:
-                raise AbortFlow("already_in_progress")
-            self.hass.config_entries.flow.async_abort(flow["flow_id"])
+            context = flow.get("context", {})
+            flow_placeholders = context.get("title_placeholders") or {}
+            if context.get("unique_id") == gateway_id:
+                if flow_placeholders == placeholders:
+                    raise AbortFlow("already_in_progress")
+                stale.append(flow["flow_id"])
+            elif flow_placeholders.get("host") == placeholders["host"]:
+                stale.append(flow["flow_id"])
+        for flow_id in stale:
+            self.hass.config_entries.flow.async_abort(flow_id)
 
     async def async_step_zeroconf_confirm(
         self, user_input: dict[str, Any] | None = None

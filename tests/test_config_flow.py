@@ -288,6 +288,62 @@ async def test_discovery_replaces_pending_flow_after_hostname_change(hass) -> No
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_replaces_pending_flow_for_new_gateway_id(hass) -> None:
+    """A new gateway ID at the same address replaces the unusable old card."""
+    other_gateway = "f" * 32
+    with patch(
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
+    ) as client_class:
+        client = client_class.return_value
+        client.base_url = "http://192.0.2.15"
+        client.async_get_info = AsyncMock(return_value=BOOTSTRAP.info)
+        first = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_ZEROCONF}, data=_discovery()
+        )
+        assert first["type"] is FlowResultType.FORM
+
+        client.async_get_info = AsyncMock(
+            return_value=replace(BOOTSTRAP.info, gateway_id=other_gateway)
+        )
+        second = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_ZEROCONF}, data=_discovery(other_gateway)
+        )
+
+    assert second["type"] is FlowResultType.FORM
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["flow_id"] for flow in flows] == [second["flow_id"]]
+    assert flows[0]["context"]["unique_id"] == other_gateway
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+async def test_discovery_keeps_pending_flow_for_other_gateway(hass) -> None:
+    """Different gateways at different addresses keep separate cards."""
+    other_gateway = "f" * 32
+    with patch(
+        "custom_components.osk_sense.config_flow.GatewayApiClient"
+    ) as client_class:
+        client = client_class.return_value
+        client.base_url = "http://192.0.2.15"
+        client.async_get_info = AsyncMock(return_value=BOOTSTRAP.info)
+        await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_ZEROCONF}, data=_discovery()
+        )
+        client.base_url = "http://192.0.2.16"
+        client.async_get_info = AsyncMock(
+            return_value=replace(
+                BOOTSTRAP.info, gateway_id=other_gateway, hostname="osk-hub-2"
+            )
+        )
+        await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": SOURCE_ZEROCONF},
+            data=_discovery(other_gateway, address="192.0.2.16", hostname="osk-hub-2"),
+        )
+
+    assert len(hass.config_entries.flow.async_progress_by_handler(DOMAIN)) == 2
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
 async def test_discovery_keeps_pending_flow_when_unchanged(hass) -> None:
     """Repeated announcements do not reset a card the user may be filling in."""
     with patch(
