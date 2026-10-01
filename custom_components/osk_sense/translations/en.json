@@ -89,5 +89,62 @@
         "none": "None / custom"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "supply_voltage": {
+        "name": "Supply voltage"
+      },
+      "temperature": {
+        "name": "Temperature"
+      },
+      "humidity": {
+        "name": "Humidity"
+      },
+      "pressure": {
+        "name": "Pressure"
+      },
+      "count": {
+        "name": "Pulse count"
+      },
+      "converted_total": {
+        "name": "Total"
+      },
+      "rssi": {
+        "name": "Signal heard by gateway"
+      },
+      "downlink_rssi": {
+        "name": "Signal heard by node"
+      },
+      "tx_power_level": {
+        "name": "Transmit level"
+      },
+      "received_at": {
+        "name": "Last seen"
+      },
+      "active_nodes": {
+        "name": "Active nodes"
+      },
+      "last_restart": {
+        "name": "Last restart"
+      },
+      "last_stream_message": {
+        "name": "Last stream message"
+      },
+      "reconnect_count": {
+        "name": "Reconnect count"
+      }
+    },
+    "binary_sensor": {
+      "state": {
+        "name": "State"
+      },
+      "radio_fallback": {
+        "name": "Gateway not heard"
+      },
+      "connection": {
+        "name": "Connection"
+      }
+    }
   }
 }

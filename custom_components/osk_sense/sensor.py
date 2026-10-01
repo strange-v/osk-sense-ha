@@ -53,7 +53,7 @@ class OskSensorDescription(SensorEntityDescription):
 SENSOR_DESCRIPTIONS: Final = {
     "supply_voltage": OskSensorDescription(
         key="supply_voltage",
-        name="Supply voltage",
+        translation_key="supply_voltage",
         device_class=SensorDeviceClass.VOLTAGE,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         state_class=SensorStateClass.MEASUREMENT,
@@ -61,7 +61,7 @@ SENSOR_DESCRIPTIONS: Final = {
     ),
     "temperature": OskSensorDescription(
         key="temperature",
-        name="Temperature",
+        translation_key="temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
@@ -69,7 +69,7 @@ SENSOR_DESCRIPTIONS: Final = {
     ),
     "humidity": OskSensorDescription(
         key="humidity",
-        name="Humidity",
+        translation_key="humidity",
         device_class=SensorDeviceClass.HUMIDITY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -77,7 +77,7 @@ SENSOR_DESCRIPTIONS: Final = {
     ),
     "pressure": OskSensorDescription(
         key="pressure",
-        name="Pressure",
+        translation_key="pressure",
         device_class=SensorDeviceClass.PRESSURE,
         native_unit_of_measurement=UnitOfPressure.HPA,
         state_class=SensorStateClass.MEASUREMENT,
@@ -85,12 +85,12 @@ SENSOR_DESCRIPTIONS: Final = {
     ),
     "count": OskSensorDescription(
         key="count",
-        name="Pulse count",
+        translation_key="count",
         state_class=SensorStateClass.TOTAL_INCREASING,
     ),
     "rssi": OskSensorDescription(
         key="rssi",
-        name="Uplink signal strength",
+        translation_key="rssi",
         source="rssi",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
@@ -100,7 +100,7 @@ SENSOR_DESCRIPTIONS: Final = {
     ),
     "tx_power_level": OskSensorDescription(
         key="tx_power_level",
-        name="Transmit power level",
+        translation_key="tx_power_level",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -108,7 +108,7 @@ SENSOR_DESCRIPTIONS: Final = {
     ),
     "downlink_rssi": OskSensorDescription(
         key="downlink_rssi",
-        name="Downlink signal strength",
+        translation_key="downlink_rssi",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         state_class=SensorStateClass.MEASUREMENT,
@@ -117,7 +117,7 @@ SENSOR_DESCRIPTIONS: Final = {
     ),
     "received_at": OskSensorDescription(
         key="received_at",
-        name="Last telemetry",
+        translation_key="received_at",
         source="received_at",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -128,21 +128,21 @@ SENSOR_DESCRIPTIONS: Final = {
 GATEWAY_SENSOR_DESCRIPTIONS: Final = (
     OskSensorDescription(
         key="active_nodes",
-        name="Active nodes",
+        translation_key="active_nodes",
         source="active_nodes",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     OskSensorDescription(
         key="last_restart",
-        name="Last restart",
+        translation_key="last_restart",
         source="last_restart",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     OskSensorDescription(
         key="last_stream_message",
-        name="Last stream message",
+        translation_key="last_stream_message",
         source="last_stream_message",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -150,7 +150,7 @@ GATEWAY_SENSOR_DESCRIPTIONS: Final = (
     ),
     OskSensorDescription(
         key="reconnect_count",
-        name="Reconnect count",
+        translation_key="reconnect_count",
         source="reconnect_count",
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -238,7 +238,7 @@ def _pulse_counter_description(
     precision = max(0, min(6, -exponent)) if isinstance(exponent, int) else 0
     return OskSensorDescription(
         key="converted_total",
-        name="Total",
+        translation_key="converted_total",
         source="converted_total",
         device_class=device_class,
         native_unit_of_measurement=unit,

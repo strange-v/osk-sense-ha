@@ -89,5 +89,62 @@
         "none": "Немає / власний"
       }
     }
+  },
+  "entity": {
+    "sensor": {
+      "supply_voltage": {
+        "name": "Напруга живлення"
+      },
+      "temperature": {
+        "name": "Температура"
+      },
+      "humidity": {
+        "name": "Вологість"
+      },
+      "pressure": {
+        "name": "Тиск"
+      },
+      "count": {
+        "name": "Кількість імпульсів"
+      },
+      "converted_total": {
+        "name": "Підсумок"
+      },
+      "rssi": {
+        "name": "Сигнал, який чує шлюз"
+      },
+      "downlink_rssi": {
+        "name": "Сигнал, який чує вузол"
+      },
+      "tx_power_level": {
+        "name": "Рівень передавача"
+      },
+      "received_at": {
+        "name": "Востаннє на зв’язку"
+      },
+      "active_nodes": {
+        "name": "Активні вузли"
+      },
+      "last_restart": {
+        "name": "Останній перезапуск"
+      },
+      "last_stream_message": {
+        "name": "Останнє повідомлення потоку"
+      },
+      "reconnect_count": {
+        "name": "Кількість перепідключень"
+      }
+    },
+    "binary_sensor": {
+      "state": {
+        "name": "Стан"
+      },
+      "radio_fallback": {
+        "name": "Вузол не чує шлюз"
+      },
+      "connection": {
+        "name": "Підключення"
+      }
+    }
   }
 }

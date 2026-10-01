@@ -27,11 +27,11 @@ if TYPE_CHECKING:
 BINARY_SENSOR_DESCRIPTIONS: Final = {
     "state": BinarySensorEntityDescription(
         key="state",
-        name="State",
+        translation_key="state",
     ),
     "radio_fallback": BinarySensorEntityDescription(
         key="radio_fallback",
-        name="Radio fallback",
+        translation_key="radio_fallback",
         device_class=BinarySensorDeviceClass.PROBLEM,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -130,7 +130,7 @@ class OskSenseBinarySensor(OskSenseEntity, BinarySensorEntity):
 class OskSenseGatewayConnection(OskSenseGatewayEntity, BinarySensorEntity):
     """Report whether the gateway telemetry stream is connected."""
 
-    _attr_name = "Connection"
+    _attr_translation_key = "connection"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
 

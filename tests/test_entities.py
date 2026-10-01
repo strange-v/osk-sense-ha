@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import time
 import unittest
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.helpers.typing import UNDEFINED
 
 from custom_components.osk_sense.api import (
     GatewayBootstrap,
@@ -198,6 +201,40 @@ class EntityMappingTest(unittest.TestCase):
         self.assertEqual(
             f"{runtime.bootstrap.info.gateway_id}_connection", connection.unique_id
         )
+
+    def test_entity_names_are_translated(self) -> None:
+        translations = (
+            Path(__file__).parents[1]
+            / "custom_components"
+            / "osk_sense"
+            / "translations"
+            / "en.json"
+        )
+        names = json.loads(translations.read_text(encoding="utf-8"))["entity"]
+        converted = _pulse_counter_description(
+            {
+                "pulse_counters": {
+                    "uid": {"units_per_pulse": 1, "unit": "L", "device_class": "water"}
+                }
+            },
+            "uid",
+        )
+        assert converted is not None
+        expected = {
+            "sensor": [
+                *SENSOR_DESCRIPTIONS.values(),
+                *GATEWAY_SENSOR_DESCRIPTIONS,
+                converted,
+            ],
+            "binary_sensor": [*BINARY_SENSOR_DESCRIPTIONS.values()],
+        }
+        for platform, descriptions in expected.items():
+            for description in descriptions:
+                with self.subTest(platform=platform, key=description.key):
+                    self.assertIsInstance(description.name, type(UNDEFINED))
+                    self.assertIn(description.translation_key, names[platform])
+        connection = OskSenseGatewayConnection(_runtime(1, {}))
+        self.assertIn(connection.translation_key, names["binary_sensor"])
 
     def test_pulse_counter_can_expose_converted_nonmetric_total(self) -> None:
         runtime = _runtime(6, {"count": 123})
