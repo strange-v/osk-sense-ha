@@ -312,3 +312,114 @@ async def test_entry_lifecycle_entities_and_deferred_stream(hass) -> None:
         assert await hass.config_entries.async_unload(entry.entry_id)
         assert entry.state is ConfigEntryState.NOT_LOADED
         assert runtime._stopping  # pyright: ignore[reportPrivateUsage]
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize("profile_id", [2, 5, 999])
+async def test_read_info_refresh_reconciles_counter_entities(hass, profile_id) -> None:
+    """A reflashed node retains its identity and exposes only current fields."""
+    counter = replace(NODE, profile_id=6)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=BOOTSTRAP.info.gateway_id,
+        data={CONF_HOST: "http://osk-hub.local", CONF_TOKEN: "secret"},
+        options={
+            "pulse_counters": {
+                DEVICE_UID: {
+                    "units_per_pulse": 0.01,
+                    "unit": "L",
+                    "device_class": "water",
+                }
+            }
+        },
+    )
+    entry.add_to_hass(hass)
+    with (
+        patch("custom_components.osk_sense.GatewayApiClient") as client_class,
+        patch.object(GatewayRuntime, "async_run", AsyncMock()),
+    ):
+        client_class.return_value.base_url = "http://osk-hub.local"
+        client_class.return_value.async_bootstrap = AsyncMock(
+            return_value=replace(BOOTSTRAP, registry=NodeRegistry(1, (counter,)))
+        )
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+        runtime = entry.runtime_data
+        runtime.connected = True
+        entity_registry = er.async_get(hass)
+        device_registry = dr.async_get(hass)
+
+        def entity_id(platform, key):
+            return entity_registry.async_get_entity_id(
+                platform, DOMAIN, f"{DEVICE_UID}_{key}"
+            )
+
+        device = device_registry.async_get_device_by_identifier(
+            (DOMAIN, DEVICE_UID), entry.entry_id
+        )
+        assert device is not None
+        voltage_id = entity_id("sensor", "supply_voltage")
+        count_id = entity_id("sensor", "count")
+        converted_id = entity_id("sensor", "converted_total")
+        assert voltage_id is not None
+        assert count_id is not None
+        assert converted_id is not None
+        telemetry = TelemetryEvent(
+            sequence=10,
+            node=counter,
+            received_at_unix_ms=int(time.time() * 1000),
+            rssi=-71,
+            telemetry=DecodedTelemetry(
+                6, "pulse_counter", {}, {"count": 123, "supply_voltage": 3.3}
+            ),
+        )
+        runtime._apply_event(telemetry)  # pyright: ignore[reportPrivateUsage]
+        assert hass.states.get(converted_id).state == "1.23"
+
+        refreshed = replace(counter, firmware="1.4.0", max_power_level=1)
+        runtime._apply_event(  # pyright: ignore[reportPrivateUsage]
+            RegistryUpdatedEvent(NodeRegistry(2, (refreshed,)))
+        )
+        await hass.async_block_till_done()
+        assert runtime.latest[DEVICE_UID] == telemetry
+        assert entity_id("sensor", "converted_total") == converted_id
+        assert hass.states.get(converted_id).state == "1.23"
+        updated_device = device_registry.async_get(device.id)
+        assert updated_device.sw_version == "1.4.0"
+
+        reflashed = replace(refreshed, profile_id=profile_id, firmware="1.5.0")
+        runtime._apply_event(  # pyright: ignore[reportPrivateUsage]
+            RegistryUpdatedEvent(NodeRegistry(3, (reflashed,)))
+        )
+        await hass.async_block_till_done()
+        assert DEVICE_UID not in runtime.latest
+        for key, old_id in (("count", count_id), ("converted_total", converted_id)):
+            assert entity_id("sensor", key) is None
+            assert hass.states.get(old_id) is None
+        updated_device = device_registry.async_get_device_by_identifier(
+            (DOMAIN, DEVICE_UID), entry.entry_id
+        )
+        assert updated_device.id == device.id
+        assert updated_device.model == f"OSK Sense profile {profile_id}"
+        assert updated_device.sw_version == "1.5.0"
+        assert (entity_id("sensor", "temperature") is not None) == (profile_id == 2)
+        assert (entity_id("binary_sensor", "state") is not None) == (profile_id == 5)
+        if profile_id != 999:
+            assert entity_id("sensor", "supply_voltage") == voltage_id
+            assert hass.states.get(voltage_id).state == "unknown"
+
+        runtime._apply_event(  # pyright: ignore[reportPrivateUsage]
+            RegistryUpdatedEvent(NodeRegistry(4, (refreshed,)))
+        )
+        await hass.async_block_till_done()
+        assert entity_id("sensor", "temperature") is None
+        assert entity_id("binary_sensor", "state") is None
+        converted_id = entity_id("sensor", "converted_total")
+        assert entity_id("sensor", "count") is not None
+        assert converted_id is not None
+        assert hass.states.get(converted_id).state == "unknown"
+        runtime._apply_event(  # pyright: ignore[reportPrivateUsage]
+            replace(telemetry, node=refreshed, sequence=11)
+        )
+        assert hass.states.get(converted_id).state == "1.23"
+        assert await hass.config_entries.async_unload(entry.entry_id)

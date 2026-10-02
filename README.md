@@ -21,6 +21,8 @@ Node entities become unavailable when the gateway disconnects or a node has not 
 
 For a pulse-counter node, open the integration's **Configure** menu to set units per pulse, unit, and device class. The raw pulse count remains available alongside the optional converted total.
 
+After reflashing a paired node, send **Read node information** from its card in the gateway web UI, then short-press the node's button. Home Assistant automatically updates the device's firmware version and profile. If the profile changes, entities follow its supported measurements and values remain unknown until new telemetry arrives. Pulse-counter conversion settings are retained, but the converted total is exposed only while the node has a pulse-counter profile.
+
 If a connection key expires or is revoked, Home Assistant offers a reauthentication repair. Create a new key on the same gateway and enter it in the repair flow; device and entity identities are preserved.
 
 For development setup, tests, and protocol updates, see [CONTRIBUTING.md](CONTRIBUTING.md).

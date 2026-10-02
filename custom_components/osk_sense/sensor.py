@@ -183,9 +183,10 @@ async def async_setup_entry(
             keys = _profile_sensor_keys(manifest, node.profile_id)
             for key in (*keys, "rssi", "received_at"):
                 desired[(node.device_uid, key)] = (node, SENSOR_DESCRIPTIONS[key])
-            converted = _pulse_counter_description(entry.options, node.device_uid)
-            if converted is not None:
-                desired[(node.device_uid, converted.key)] = (node, converted)
+            if "count" in keys:
+                converted = _pulse_counter_description(entry.options, node.device_uid)
+                if converted is not None:
+                    desired[(node.device_uid, converted.key)] = (node, converted)
 
         entity_registry = er.async_get(hass)
         for identity, entity in tuple(tracked.items()):
