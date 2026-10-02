@@ -27,11 +27,14 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.osk_sense import async_setup_entry
 from custom_components.osk_sense.api import (
+    ApiResponseError,
     GatewayBootstrap,
     GatewayInfo,
     GatewayUiInfo,
+    InvalidResponseError,
     NodeInfo,
     NodeRegistry,
+    UnsupportedVersionError,
 )
 from custom_components.osk_sense.const import CONF_TOKEN, DOMAIN
 from custom_components.osk_sense.protocol import DecodedTelemetry
@@ -93,6 +96,31 @@ async def test_setup_rejects_address_of_another_gateway(hass) -> None:
         client_class.return_value.async_bootstrap.assert_awaited_once_with(
             expected_gateway_id=entry.unique_id
         )
+
+
+@pytest.mark.usefixtures("enable_custom_integrations")
+@pytest.mark.parametrize(
+    "error",
+    [
+        InvalidResponseError("tx_power_target must not exceed the ceiling"),
+        ApiResponseError(404, "not_found"),
+        UnsupportedVersionError(2, 1),
+    ],
+)
+async def test_setup_error_preserves_response_failure_reason(hass, error) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=BOOTSTRAP.info.gateway_id,
+        data={CONF_HOST: "http://osk-hub.local", CONF_TOKEN: "secret"},
+    )
+    with patch("custom_components.osk_sense.GatewayApiClient") as client_class:
+        client_class.return_value.async_bootstrap = AsyncMock(side_effect=error)
+        with pytest.raises(ConfigEntryError) as raised:
+            await async_setup_entry(hass, entry)
+        assert (
+            str(raised.value) == f"Invalid or unsupported OSK Sense response: {error}"
+        )
+        assert raised.value.__cause__ is error
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")

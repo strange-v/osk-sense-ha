@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import socket
 import unittest
 from copy import deepcopy
@@ -11,6 +13,7 @@ import pytest
 from aiohttp import ClientSession, web
 
 from custom_components.osk_sense.api import (
+    MAX_RESPONSE_SIZE,
     WEBSOCKET_HEARTBEAT_SECONDS,
     ApiResponseError,
     AuthenticationError,
@@ -84,6 +87,7 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
         self.nodes_status = 200
         self.nodes_content_type = "application/json"
         self.nodes_raw_body: str | None = None
+        self.nodes_chunks: tuple[bytes, ...] | None = None
         self.seen_info_authorization: str | None = None
         self.seen_nodes_authorization: str | None = None
         app = web.Application()
@@ -113,8 +117,16 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
             )
         return web.json_response(self.info, status=self.info_status)
 
-    async def _handle_nodes(self, request: web.Request) -> web.Response:
+    async def _handle_nodes(self, request: web.Request) -> web.StreamResponse:
         self.seen_nodes_authorization = request.headers.get("Authorization")
+        if self.nodes_chunks is not None:
+            response = web.StreamResponse(headers={"Content-Type": "application/json"})
+            await response.prepare(request)
+            for chunk in self.nodes_chunks:
+                await response.write(chunk)
+                await asyncio.sleep(0.01)
+            await response.write_eof()
+            return response
         if self.nodes_raw_body is not None:
             return web.Response(
                 text=self.nodes_raw_body,
@@ -207,6 +219,27 @@ class ApiClientTest(unittest.IsolatedAsyncioTestCase):
     async def test_malformed_json_response_is_invalid(self) -> None:
         self.nodes_raw_body = "{not-json"
         with self.assertRaisesRegex(InvalidResponseError, "invalid JSON"):
+            await self.client.async_get_nodes()
+
+    async def test_bootstrap_reads_json_delivered_in_multiple_chunks(self) -> None:
+        body = json.dumps(self.nodes).encode()
+        split = body.index(b"Bedroom") + 3
+        self.nodes_chunks = (
+            body[:split],
+            body[split : split + 100],
+            body[split + 100 :],
+        )
+
+        bootstrap = await self.client.async_bootstrap()
+
+        self.assertEqual(2, len(bootstrap.registry.nodes))
+        self.assertEqual("Bedroom", bootstrap.registry.nodes[0].display_name)
+
+    async def test_response_size_limit_is_enforced(self) -> None:
+        self.nodes_raw_body = json.dumps(self.nodes) + " " * MAX_RESPONSE_SIZE
+        with self.assertRaisesRegex(
+            InvalidResponseError, "response exceeds size limit"
+        ):
             await self.client.async_get_nodes()
 
     async def test_invalid_gateway_identity_is_rejected(self) -> None:

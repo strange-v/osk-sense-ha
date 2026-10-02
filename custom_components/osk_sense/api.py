@@ -29,7 +29,7 @@ MAX_STREAM_MESSAGE_SIZE: Final = 1024
 WEBSOCKET_HEARTBEAT_SECONDS: Final = 30.0
 SUPPORTED_API_VERSIONS: Final = frozenset({1})
 SUPPORTED_STREAM_VERSIONS: Final = frozenset({1})
-CLIENT_NAME: Final = "home-assistant/1.1.1"
+CLIENT_NAME: Final = "home-assistant/1.1.2"
 
 _LOWER_HEX_128 = re.compile(r"^[0-9a-f]{32}$")
 _UPPER_HEX_UID = re.compile(r"^[0-9A-F]{20}$")
@@ -274,7 +274,15 @@ class GatewayApiClient:
                 headers=headers,
                 timeout=self._timeout,
             ) as response:
-                body = await response.content.read(MAX_RESPONSE_SIZE + 1)
+                body_buffer = bytearray()
+                while len(body_buffer) <= MAX_RESPONSE_SIZE:
+                    chunk = await response.content.read(
+                        MAX_RESPONSE_SIZE + 1 - len(body_buffer)
+                    )
+                    if not chunk:
+                        break
+                    body_buffer.extend(chunk)
+                body = bytes(body_buffer)
                 if authenticated and response.status in (401, 403):
                     raise AuthenticationError("invalid bearer token")
                 # A gateway without its storage cannot vouch for its identity.

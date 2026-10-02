@@ -54,7 +54,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntegrationConfigEntry) 
     except CannotConnectError as error:
         raise ConfigEntryNotReady("Cannot connect to OSK Sense Hub") from error
     except (ApiResponseError, InvalidResponseError, UnsupportedVersionError) as error:
-        raise ConfigEntryError("Invalid or unsupported OSK Sense response") from error
+        raise ConfigEntryError(
+            f"Invalid or unsupported OSK Sense response: {error}"
+        ) from error
 
     manifest = await hass.async_add_executor_job(ProtocolManifest.load_default)
 
